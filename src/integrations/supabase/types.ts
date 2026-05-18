@@ -14,7 +14,169 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      bot_messages: {
+        Row: {
+          body: string | null
+          created_at: string
+          cycle_id: string | null
+          direction: Database["public"]["Enums"]["msg_direction"]
+          id: string
+          media_url: string | null
+          raw: Json | null
+          user_id: string | null
+          wa_message_id: string | null
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          cycle_id?: string | null
+          direction: Database["public"]["Enums"]["msg_direction"]
+          id?: string
+          media_url?: string | null
+          raw?: Json | null
+          user_id?: string | null
+          wa_message_id?: string | null
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          cycle_id?: string | null
+          direction?: Database["public"]["Enums"]["msg_direction"]
+          id?: string
+          media_url?: string | null
+          raw?: Json | null
+          user_id?: string | null
+          wa_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bot_messages_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "cycles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cycles: {
+        Row: {
+          created_at: string
+          ended_on: string | null
+          id: string
+          notes: string | null
+          ovulation_day: number | null
+          predicted_fertile_end: string | null
+          predicted_fertile_start: string | null
+          started_on: string
+          status: Database["public"]["Enums"]["cycle_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          ended_on?: string | null
+          id?: string
+          notes?: string | null
+          ovulation_day?: number | null
+          predicted_fertile_end?: string | null
+          predicted_fertile_start?: string | null
+          started_on: string
+          status?: Database["public"]["Enums"]["cycle_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          ended_on?: string | null
+          id?: string
+          notes?: string | null
+          ovulation_day?: number | null
+          predicted_fertile_end?: string | null
+          predicted_fertile_start?: string | null
+          started_on?: string
+          status?: Database["public"]["Enums"]["cycle_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avg_cycle_length: number
+          bot_state: Json
+          created_at: string
+          disclaimer_accepted_at: string | null
+          display_name: string | null
+          id: string
+          period_length: number
+          updated_at: string
+          whatsapp_number: string | null
+        }
+        Insert: {
+          avg_cycle_length?: number
+          bot_state?: Json
+          created_at?: string
+          disclaimer_accepted_at?: string | null
+          display_name?: string | null
+          id: string
+          period_length?: number
+          updated_at?: string
+          whatsapp_number?: string | null
+        }
+        Update: {
+          avg_cycle_length?: number
+          bot_state?: Json
+          created_at?: string
+          disclaimer_accepted_at?: string | null
+          display_name?: string | null
+          id?: string
+          period_length?: number
+          updated_at?: string
+          whatsapp_number?: string | null
+        }
+        Relationships: []
+      }
+      temperature_logs: {
+        Row: {
+          created_at: string
+          cycle_id: string | null
+          id: string
+          logged_for: string
+          notes: string | null
+          source: Database["public"]["Enums"]["log_source"]
+          temp_celsius: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          cycle_id?: string | null
+          id?: string
+          logged_for: string
+          notes?: string | null
+          source?: Database["public"]["Enums"]["log_source"]
+          temp_celsius: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          cycle_id?: string | null
+          id?: string
+          logged_for?: string
+          notes?: string | null
+          source?: Database["public"]["Enums"]["log_source"]
+          temp_celsius?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "temperature_logs_cycle_id_fkey"
+            columns: ["cycle_id"]
+            isOneToOne: false
+            referencedRelation: "cycles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +185,9 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      cycle_status: "active" | "completed" | "archived"
+      log_source: "whatsapp" | "web"
+      msg_direction: "in" | "out"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +314,10 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      cycle_status: ["active", "completed", "archived"],
+      log_source: ["whatsapp", "web"],
+      msg_direction: ["in", "out"],
+    },
   },
 } as const
