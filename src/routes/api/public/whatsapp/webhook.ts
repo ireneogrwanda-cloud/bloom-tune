@@ -1,66 +1,58 @@
 import "@tanstack/react-start";
 import { createFileRoute } from "@tanstack/react-router";
-import { verifyMetaSignature } from "@/lib/whatsapp.server";
+import { verifyTwilioSignature } from "@/lib/whatsapp.server";
 import { handleIncomingMessage } from "@/lib/bot.server";
 
 export const Route = createFileRoute("/api/public/whatsapp/webhook")({
   server: {
     handlers: {
-      // Meta sends a GET request to verify the webhook.
-      GET: async ({ request }: { request: Request }) => {
-        const url = new URL(request.url);
-        const mode = url.searchParams.get("hub.mode");
-        const token = url.searchParams.get("hub.verify_token");
-        const challenge = url.searchParams.get("hub.challenge");
-        const expected = process.env.WHATSAPP_VERIFY_TOKEN;
-        if (mode === "subscribe" && expected && token === expected && challenge) {
-          return new Response(challenge, { status: 200 });
-        }
-        return new Response("Forbidden", { status: 403 });
-      },
+      // Twilio doesn't use GET verification, but respond OK for health checks.
+      GET: async () => new Response("ok", { status: 200 }),
 
       POST: async ({ request }: { request: Request }) => {
         const rawBody = await request.text();
-        const sigHeader = request.headers.get("x-hub-signature-256");
-        const valid = await verifyMetaSignature(rawBody, sigHeader);
+        const params: Record<string, string> = {};
+        for (const [k, v] of new URLSearchParams(rawBody)) params[k] = v;
+
+        // Twilio signs against the exact public URL Twilio is configured to call.
+        // Prefer X-Forwarded-* headers if present, then fall back to request.url.
+        const proto =
+          request.headers.get("x-forwarded-proto") ?? new URL(request.url).protocol.replace(":", "");
+        const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+        const path = new URL(request.url).pathname;
+        const fullUrl = host ? `${proto}://${host}${path}` : request.url;
+
+        const sigHeader = request.headers.get("x-twilio-signature");
+        const valid = await verifyTwilioSignature(fullUrl, params, sigHeader);
         if (!valid) {
-          console.warn("WhatsApp webhook: invalid signature");
+          console.warn("Twilio webhook: invalid signature", { fullUrl });
           return new Response("Invalid signature", { status: 401 });
         }
 
-        let payload: any;
         try {
-          payload = JSON.parse(rawBody);
-        } catch {
-          return new Response("Bad JSON", { status: 400 });
-        }
+          const from = params.From ?? ""; // e.g. "whatsapp:+15551234567"
+          const waId = params.MessageSid ?? "";
+          const text = params.Body ?? "";
+          const numMedia = Number(params.NumMedia ?? "0");
 
-        // Process messages asynchronously so we respond fast (Meta retries on slow replies)
-        try {
-          const entries = payload?.entry ?? [];
-          for (const entry of entries) {
-            const changes = entry?.changes ?? [];
-            for (const change of changes) {
-              const value = change?.value;
-              const messages = value?.messages ?? [];
-              for (const msg of messages) {
-                if (msg.type !== "text") continue;
-                const from: string = msg.from;
-                const waId: string = msg.id;
-                const text: string = msg.text?.body ?? "";
-                try {
-                  await handleIncomingMessage({ from, waMessageId: waId, text, raw: msg });
-                } catch (e) {
-                  console.error("handleIncomingMessage error", e);
-                }
-              }
-            }
+          if (from && (text || numMedia > 0)) {
+            const phone = from.replace(/^whatsapp:/, "");
+            await handleIncomingMessage({
+              from: phone,
+              waMessageId: waId,
+              text,
+              raw: params,
+            });
           }
         } catch (e) {
-          console.error("webhook processing error", e);
+          console.error("twilio webhook processing error", e);
         }
 
-        return new Response("ok", { status: 200 });
+        // Empty TwiML — we reply via the REST API in handleIncomingMessage.
+        return new Response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', {
+          status: 200,
+          headers: { "Content-Type": "text/xml" },
+        });
       },
     },
   },
