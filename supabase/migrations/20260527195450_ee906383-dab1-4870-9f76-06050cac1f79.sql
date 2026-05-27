@@ -1,0 +1,3 @@
+CREATE POLICY "Users insert own messages" ON public.bot_messages FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users update own messages" ON public.bot_messages FOR UPDATE TO authenticated USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users delete own messages" ON public.bot_messages FOR DELETE TO authenticated USING (auth.uid() = user_id);
