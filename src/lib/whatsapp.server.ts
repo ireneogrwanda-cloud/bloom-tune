@@ -16,9 +16,8 @@ function gatewayHeaders() {
 }
 
 function getFrom(): string {
-  const from = process.env.TWILIO_WHATSAPP_FROM;
-  if (!from) throw new Error("TWILIO_WHATSAPP_FROM is not configured");
-  // Ensure whatsapp: prefix
+  // Default to the Twilio WhatsApp Sandbox sender if not configured.
+  const from = process.env.TWILIO_WHATSAPP_FROM || "+14155238886";
   return from.startsWith("whatsapp:") ? from : `whatsapp:${from}`;
 }
 
