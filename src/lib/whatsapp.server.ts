@@ -1,84 +1,102 @@
-// WhatsApp Cloud API helpers — server only.
+// Twilio WhatsApp helpers — server only. All outbound requests go through the
+// Lovable connector gateway, so we never read Twilio account credentials here.
 
-const GRAPH = "https://graph.facebook.com/v21.0";
+const GATEWAY_URL = "https://connector-gateway.lovable.dev/twilio";
 
-function env(name: string): string {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env var: ${name}`);
-  return v;
+function gatewayHeaders() {
+  const LOVABLE_API_KEY = process.env.LOVABLE_API_KEY;
+  if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+  const TWILIO_API_KEY = process.env.TWILIO_API_KEY;
+  if (!TWILIO_API_KEY) throw new Error("TWILIO_API_KEY is not configured");
+  return {
+    Authorization: `Bearer ${LOVABLE_API_KEY}`,
+    "X-Connection-Api-Key": TWILIO_API_KEY,
+    "Content-Type": "application/x-www-form-urlencoded",
+  };
+}
+
+function getFrom(): string {
+  const from = process.env.TWILIO_WHATSAPP_FROM;
+  if (!from) throw new Error("TWILIO_WHATSAPP_FROM is not configured");
+  // Ensure whatsapp: prefix
+  return from.startsWith("whatsapp:") ? from : `whatsapp:${from}`;
+}
+
+function toWa(to: string): string {
+  return to.startsWith("whatsapp:") ? to : `whatsapp:${to}`;
 }
 
 export async function sendWhatsAppText(to: string, body: string) {
-  const phoneId = env("WHATSAPP_PHONE_NUMBER_ID");
-  const token = env("WHATSAPP_ACCESS_TOKEN");
-  const res = await fetch(`${GRAPH}/${phoneId}/messages`, {
+  const params = new URLSearchParams({
+    To: toWa(to),
+    From: getFrom(),
+    Body: body.slice(0, 1500),
+  });
+  const res = await fetch(`${GATEWAY_URL}/Messages.json`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      to,
-      type: "text",
-      text: { body: body.slice(0, 4000) },
-    }),
+    headers: gatewayHeaders(),
+    body: params,
   });
   const data = await res.json();
   if (!res.ok) {
-    console.error("WhatsApp send failed", res.status, data);
-    throw new Error(`WhatsApp send failed: ${res.status}`);
+    console.error("Twilio WhatsApp send failed", res.status, data);
+    throw new Error(`Twilio send failed [${res.status}]: ${JSON.stringify(data)}`);
   }
   return data;
 }
 
-// Send an image from a public URL (must be reachable by Meta).
 export async function sendWhatsAppImage(to: string, imageUrl: string, caption?: string) {
-  const phoneId = env("WHATSAPP_PHONE_NUMBER_ID");
-  const token = env("WHATSAPP_ACCESS_TOKEN");
-  const res = await fetch(`${GRAPH}/${phoneId}/messages`, {
+  const params = new URLSearchParams({
+    To: toWa(to),
+    From: getFrom(),
+    MediaUrl: imageUrl,
+  });
+  if (caption) params.set("Body", caption.slice(0, 1500));
+  const res = await fetch(`${GATEWAY_URL}/Messages.json`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      to,
-      type: "image",
-      image: { link: imageUrl, caption: caption?.slice(0, 1024) },
-    }),
+    headers: gatewayHeaders(),
+    body: params,
   });
   const data = await res.json();
   if (!res.ok) {
-    console.error("WhatsApp image send failed", res.status, data);
+    console.error("Twilio WhatsApp image send failed", res.status, data);
   }
   return data;
 }
 
-// Verify Meta webhook X-Hub-Signature-256 header.
-export async function verifyMetaSignature(rawBody: string, header: string | null): Promise<boolean> {
-  if (!header || !header.startsWith("sha256=")) return false;
-  const appSecret = process.env.WHATSAPP_APP_SECRET;
-  if (!appSecret) return false;
-  const provided = header.slice("sha256=".length);
+// Verify Twilio's X-Twilio-Signature on inbound webhooks.
+// Algorithm: HMAC-SHA1( fullUrl + concat(sortedParamKey + paramValue) ), base64.
+// Reference: https://www.twilio.com/docs/usage/webhooks/webhooks-security
+export async function verifyTwilioSignature(
+  fullUrl: string,
+  params: Record<string, string>,
+  header: string | null,
+): Promise<boolean> {
+  if (!header) return false;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  if (!authToken) {
+    console.warn("TWILIO_AUTH_TOKEN missing — cannot verify signature");
+    return false;
+  }
+  const sortedKeys = Object.keys(params).sort();
+  let data = fullUrl;
+  for (const k of sortedKeys) data += k + params[k];
 
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
-    enc.encode(appSecret),
-    { name: "HMAC", hash: "SHA-256" },
+    enc.encode(authToken),
+    { name: "HMAC", hash: "SHA-1" },
     false,
     ["sign"],
   );
-  const sigBuf = await crypto.subtle.sign("HMAC", key, enc.encode(rawBody));
-  const expected = Array.from(new Uint8Array(sigBuf))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-  if (expected.length !== provided.length) return false;
+  const sigBuf = await crypto.subtle.sign("HMAC", key, enc.encode(data));
+  const expected = btoa(String.fromCharCode(...new Uint8Array(sigBuf)));
+
+  if (expected.length !== header.length) return false;
   let diff = 0;
   for (let i = 0; i < expected.length; i++) {
-    diff |= expected.charCodeAt(i) ^ provided.charCodeAt(i);
+    diff |= expected.charCodeAt(i) ^ header.charCodeAt(i);
   }
   return diff === 0;
 }
