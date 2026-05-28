@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { completeOnboarding } from "@/lib/profile.functions";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,15 @@ function Onboarding() {
   const [lastPeriod, setLastPeriod] = useState(new Date().toISOString().slice(0, 10));
   const [agree, setAgree] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    try {
+      const p = sessionStorage.getItem("mira_signup_phone");
+      const n = sessionStorage.getItem("mira_signup_name");
+      if (p) setPhone(p);
+      if (n) setDisplayName(n);
+    } catch {}
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
