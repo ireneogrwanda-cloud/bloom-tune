@@ -18,18 +18,26 @@ function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [phone, setPhone] = useState("");
   const [agree, setAgree] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!agree) return toast.error("Please acknowledge the disclaimer to continue.");
+    if (!/^\+?\d[\d\s\-()]{6,19}$/.test(phone)) {
+      return toast.error("Enter a valid WhatsApp number including country code");
+    }
     setLoading(true);
+    try {
+      sessionStorage.setItem("mira_signup_phone", phone);
+      sessionStorage.setItem("mira_signup_name", displayName);
+    } catch {}
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { display_name: displayName },
+        data: { display_name: displayName, whatsapp_number: phone },
         emailRedirectTo: `${window.location.origin}/dashboard`,
       },
     });
@@ -49,6 +57,19 @@ function SignupPage() {
         <div className="space-y-1.5">
           <Label htmlFor="email">Email</Label>
           <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="phone">WhatsApp number</Label>
+          <Input
+            id="phone"
+            type="tel"
+            autoComplete="tel"
+            placeholder="+1 555 123 4567"
+            required
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">Include country code — this is how the bot recognizes you.</p>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="password">Password</Label>

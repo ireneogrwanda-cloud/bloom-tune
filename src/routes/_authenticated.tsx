@@ -33,7 +33,11 @@ function AuthLayout() {
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-rose-500 text-white text-sm">M</span>
             Mira
           </Link>
-          <Button variant="ghost" size="sm" onClick={signOut}>Sign out</Button>
+          <nav className="flex items-center gap-1">
+            <Button asChild variant="ghost" size="sm"><Link to="/dashboard">Dashboard</Link></Button>
+            <Button asChild variant="ghost" size="sm"><Link to="/settings">Settings</Link></Button>
+            <Button variant="ghost" size="sm" onClick={signOut}>Sign out</Button>
+          </nav>
         </div>
       </header>
       <main className="container mx-auto px-6 py-8"><Outlet /></main>
