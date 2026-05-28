@@ -35,13 +35,28 @@ export const getDashboard = createServerFn({ method: "GET" })
     };
   });
 
+export const getProfile = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  });
+
+const phoneSchema = z
+  .string()
+  .min(7)
+  .max(20)
+  .regex(/^\+?\d[\d\s\-()]*$/, "Use digits and optional +, spaces, dashes");
+
 const onboardSchema = z.object({
   displayName: z.string().min(1).max(80),
-  whatsappNumber: z
-    .string()
-    .min(7)
-    .max(20)
-    .regex(/^\+?\d[\d\s\-()]*$/, "Use digits and optional +, spaces, dashes"),
+  whatsappNumber: phoneSchema,
   avgCycleLength: z.number().int().min(20).max(45),
   periodLength: z.number().int().min(2).max(10),
   lastPeriodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -82,6 +97,35 @@ export const completeOnboarding = createServerFn({ method: "POST" })
       .insert({ user_id: userId, started_on: data.lastPeriodStart, status: "active" });
     if (cycErr) throw cycErr;
     return { ok: true };
+  });
+
+const updateProfileSchema = z.object({
+  displayName: z.string().min(1).max(80),
+  whatsappNumber: phoneSchema,
+  avgCycleLength: z.number().int().min(20).max(45),
+  periodLength: z.number().int().min(2).max(10),
+});
+
+export const updateProfile = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => updateProfileSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const normalized = data.whatsappNumber.replace(/[^\d]/g, "");
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        display_name: data.displayName,
+        whatsapp_number: normalized,
+        avg_cycle_length: data.avgCycleLength,
+        period_length: data.periodLength,
+      })
+      .eq("id", userId);
+    if (error) {
+      if (error.code === "23505") throw new Error("That WhatsApp number is already linked to another account.");
+      throw error;
+    }
+    return { ok: true, whatsappNumber: normalized };
   });
 
 const tempSchema = z.object({
