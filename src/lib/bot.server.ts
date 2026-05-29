@@ -10,8 +10,71 @@ import {
   type TempPoint,
 } from "./fertility";
 
-const DISCLAIMER =
-  "ℹ️ This bot helps you track fertility patterns. It is NOT medical advice and NOT a contraceptive method.";
+const DISCLAIMER = "ℹ️ This bot helps you track fertility patterns.";
+
+// Map of WhatsApp country dialing code -> language name (longest prefix wins).
+const COUNTRY_LANG: Array<[string, string]> = [
+  ["1", "English"], ["44", "English"], ["61", "English"], ["64", "English"],
+  ["353", "English"], ["27", "English"],
+  ["33", "French"], ["32", "French"], ["241", "French"], ["225", "French"],
+  ["49", "German"], ["43", "German"], ["41", "German"],
+  ["39", "Italian"],
+  ["34", "Spanish"], ["52", "Spanish"], ["54", "Spanish"], ["56", "Spanish"],
+  ["57", "Spanish"], ["58", "Spanish"], ["51", "Spanish"], ["502", "Spanish"],
+  ["503", "Spanish"], ["504", "Spanish"], ["505", "Spanish"], ["506", "Spanish"],
+  ["351", "Portuguese"], ["55", "Portuguese"],
+  ["31", "Dutch"],
+  ["46", "Swedish"], ["47", "Norwegian"], ["45", "Danish"], ["358", "Finnish"],
+  ["48", "Polish"], ["420", "Czech"], ["36", "Hungarian"], ["40", "Romanian"],
+  ["30", "Greek"], ["90", "Turkish"], ["7", "Russian"], ["380", "Ukrainian"],
+  ["972", "Hebrew"],
+  ["20", "Arabic"], ["966", "Arabic"], ["971", "Arabic"], ["962", "Arabic"],
+  ["961", "Arabic"], ["965", "Arabic"], ["974", "Arabic"], ["973", "Arabic"],
+  ["968", "Arabic"], ["212", "Arabic"], ["213", "Arabic"], ["216", "Arabic"],
+  ["98", "Persian"],
+  ["91", "Hindi"], ["92", "Urdu"], ["880", "Bengali"], ["94", "Sinhala"],
+  ["977", "Nepali"],
+  ["86", "Chinese"], ["852", "Chinese"], ["853", "Chinese"], ["886", "Chinese"],
+  ["81", "Japanese"], ["82", "Korean"],
+  ["66", "Thai"], ["84", "Vietnamese"], ["62", "Indonesian"], ["60", "Malay"],
+  ["63", "Filipino"],
+  ["254", "Swahili"], ["255", "Swahili"], ["256", "Swahili"],
+  ["234", "English"], ["233", "English"],
+];
+
+function detectLanguage(phone: string): string {
+  const n = normalizePhone(phone);
+  const sorted = [...COUNTRY_LANG].sort((a, b) => b[0].length - a[0].length);
+  for (const [code, lang] of sorted) {
+    if (n.startsWith(code)) return lang;
+  }
+  return "English";
+}
+
+async function translate(text: string, lang: string): Promise<string> {
+  if (lang === "English" || !text.trim()) return text;
+  const key = process.env.LOVABLE_API_KEY;
+  if (!key) return text;
+  try {
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [{
+          role: "user",
+          content: `Translate the following WhatsApp message into ${lang}. Preserve emojis, numbers, line breaks, and *markdown* formatting exactly. Do not add commentary, quotes, or explanations — output only the translation.\n\n---\n${text}`,
+        }],
+      }),
+    });
+    if (!res.ok) return text;
+    const data = await res.json();
+    return data?.choices?.[0]?.message?.content?.trim() || text;
+  } catch {
+    return text;
+  }
+}
+
 
 function normalizePhone(p: string): string {
   return p.replace(/[^\d]/g, "");
