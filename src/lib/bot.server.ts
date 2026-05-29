@@ -153,10 +153,7 @@ export async function handleIncomingMessage(args: {
       email: `wa_${n}@bot.local`,
       email_confirm: true,
       user_metadata: { display_name: `WhatsApp ${n.slice(-4)}`, whatsapp_number: n },
-    });
-    if (userErr || !userData?.user) {
-      console.error("auto-create auth user failed", userErr);
-      await sendWhatsAppText(from, "Sorry, something went wrong setting up your account. Please try again.");
+      await sendWhatsAppText(from, await translate("Sorry, something went wrong setting up your account. Please try again.", detectLanguage(from)));
       return;
     }
     const { data: updated, error: updErr } = await supabaseAdmin
@@ -167,13 +164,15 @@ export async function handleIncomingMessage(args: {
       .single();
     if (updErr || !updated) {
       console.error("auto-create profile update failed", updErr);
-      await sendWhatsAppText(from, "Sorry, something went wrong setting up your account. Please try again.");
+      await sendWhatsAppText(from, await translate("Sorry, something went wrong setting up your account. Please try again.", detectLanguage(from)));
       return;
     }
     profile = updated;
-    await sendWhatsAppText(
-      from,
-      `👋 Welcome! I've set up a new account for you.\n\n${DISCLAIMER}`,
+    const welcome = `👋 Welcome! I've set up a new account for you.\n\n${DISCLAIMER}`;
+    await sendWhatsAppText(from, await translate(welcome, detectLanguage(from)));
+  }
+  await logInbound(profile.id, from, waMessageId, trimmed, raw);
+
     );
   }
   await logInbound(profile.id, from, waMessageId, trimmed, raw);
