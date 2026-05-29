@@ -153,6 +153,9 @@ export async function handleIncomingMessage(args: {
       email: `wa_${n}@bot.local`,
       email_confirm: true,
       user_metadata: { display_name: `WhatsApp ${n.slice(-4)}`, whatsapp_number: n },
+    });
+    if (userErr || !userData?.user) {
+      console.error("auto-create auth user failed", userErr);
       await sendWhatsAppText(from, await translate("Sorry, something went wrong setting up your account. Please try again.", detectLanguage(from)));
       return;
     }
@@ -173,9 +176,6 @@ export async function handleIncomingMessage(args: {
   }
   await logInbound(profile.id, from, waMessageId, trimmed, raw);
 
-    );
-  }
-  await logInbound(profile.id, from, waMessageId, trimmed, raw);
 
 
 
