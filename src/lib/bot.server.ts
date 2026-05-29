@@ -84,27 +84,35 @@ export async function handleIncomingMessage(args: {
   let profile = await findUserByPhone(from);
   if (!profile) {
     const n = normalizePhone(from);
-    const { data: created, error: createErr } = await supabaseAdmin
-      .from("profiles")
-      .insert({
-        id: crypto.randomUUID(),
-        whatsapp_number: n,
-        display_name: `WhatsApp ${n.slice(-4)}`,
-      })
-      .select("*")
-      .single();
-    if (createErr || !created) {
-      console.error("auto-create profile failed", createErr);
+    const { data: userData, error: userErr } = await supabaseAdmin.auth.admin.createUser({
+      email: `wa_${n}@bot.local`,
+      email_confirm: true,
+      user_metadata: { display_name: `WhatsApp ${n.slice(-4)}`, whatsapp_number: n },
+    });
+    if (userErr || !userData?.user) {
+      console.error("auto-create auth user failed", userErr);
       await sendWhatsAppText(from, "Sorry, something went wrong setting up your account. Please try again.");
       return;
     }
-    profile = created;
+    const { data: updated, error: updErr } = await supabaseAdmin
+      .from("profiles")
+      .update({ whatsapp_number: n })
+      .eq("id", userData.user.id)
+      .select("*")
+      .single();
+    if (updErr || !updated) {
+      console.error("auto-create profile update failed", updErr);
+      await sendWhatsAppText(from, "Sorry, something went wrong setting up your account. Please try again.");
+      return;
+    }
+    profile = updated;
     await sendWhatsAppText(
       from,
       `👋 Welcome! I've set up a new account for you.\n\n${DISCLAIMER}`,
     );
   }
   await logInbound(profile.id, from, waMessageId, trimmed, raw);
+
 
 
   // Commands
