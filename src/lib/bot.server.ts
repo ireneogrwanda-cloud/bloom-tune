@@ -106,13 +106,12 @@ async function logOutbound(userId: string | null, body: string) {
   await supabaseAdmin.from("bot_messages").insert({
     user_id: userId,
     direction: "out",
-    body,
-  });
+async function reply(userId: string | null, to: string, body: string) {
+  const translated = await translate(body, detectLanguage(to));
+  await sendWhatsAppText(to, translated);
+  await logOutbound(userId, translated);
 }
 
-async function reply(userId: string | null, to: string, body: string) {
-  await sendWhatsAppText(to, body);
-  await logOutbound(userId, body);
 }
 
 async function getOrCreateActiveCycle(userId: string, cycleStartIso: string) {
