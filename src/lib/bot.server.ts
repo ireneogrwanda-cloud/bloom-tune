@@ -81,18 +81,31 @@ export async function handleIncomingMessage(args: {
   const trimmed = text.trim();
   const lower = trimmed.toLowerCase();
 
-  const profile = await findUserByPhone(from);
-  await logInbound(profile?.id ?? null, from, waMessageId, trimmed, raw);
-
+  let profile = await findUserByPhone(from);
   if (!profile) {
+    const n = normalizePhone(from);
+    const { data: created, error: createErr } = await supabaseAdmin
+      .from("profiles")
+      .insert({
+        id: crypto.randomUUID(),
+        whatsapp_number: n,
+        display_name: `WhatsApp ${n.slice(-4)}`,
+      })
+      .select("*")
+      .single();
+    if (createErr || !created) {
+      console.error("auto-create profile failed", createErr);
+      await sendWhatsAppText(from, "Sorry, something went wrong setting up your account. Please try again.");
+      return;
+    }
+    profile = created;
     await sendWhatsAppText(
       from,
-      `👋 Welcome! I don't recognize this number yet.\n\nPlease sign up at our web app and add your WhatsApp number (${normalizePhone(
-        from,
-      )}) to your profile.\n\n${DISCLAIMER}`,
+      `👋 Welcome! I've set up a new account for you.\n\n${DISCLAIMER}`,
     );
-    return;
   }
+  await logInbound(profile.id, from, waMessageId, trimmed, raw);
+
 
   // Commands
   if (lower === "help" || lower === "/help") {
