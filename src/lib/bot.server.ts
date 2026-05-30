@@ -54,31 +54,10 @@ function detectLanguage(phone: string): string {
   return "English";
 }
 
-// Per-language style guidance to produce natural, grammatically polished output.
-const LANG_STYLE: Record<string, string> = {
-  Kinyarwanda: `Write in fluent, natural, grammatically perfect Kinyarwanda — the way an educated Rwandan would speak warmly to a friend. Use correct noun classes, verb conjugations, and tenses. Prefer modern everyday vocabulary over literal word-for-word translation. Use these reference terms consistently:
-- temperature → "temperature" (keep as-is) or "ubushyuhe bw'umubiri"
-- cycle day → "umunsi wa N" (do NOT say "umunsi w'ikizinga")
-- period / menstruation → "imihango"
-- fertile / can conceive → "ushobora gusama" / "uburumbuke"
-- infertile / cannot conceive → "ntushobora gusama"
-- ovulation → "gusama" (the day eggs are released)
-- next period → "igihe gikurikira cy'imihango"
-- date → "italiki"
-Use 🔴 for fertile days, 🟢 for infertile days, 🥚 for ovulation, 🩸 for menstruation. Keep sentences short, warm, and easy to read on WhatsApp. Example of the target quality:
-"✅ Umunsi wa 2 wapimye temperature ya 36.64°C ku italiki ya (30-05-2026).
-Uri ku munsi wa 2 w'imihango. Uburumbuke buri hasi cyane ubu.
-🔴 Igihe cyose ushobora gusama: iminsi 9–15
-🟢 Ntabwo ushobora gusama: iminsi isigaye y'icyiciro
-🥚 Itariki yitezwe yo gusama: umunsi wa 14 (2026-06-11)
-🩸 Igihe gikurikira cy'imihango giteganijwe: 2026-06-26"`,
-};
-
 async function translate(text: string, lang: string): Promise<string> {
   if (lang === "English" || !text.trim()) return text;
   const key = process.env.LOVABLE_API_KEY;
   if (!key) return text;
-  const styleGuide = LANG_STYLE[lang] ?? "";
   try {
     const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -87,7 +66,7 @@ async function translate(text: string, lang: string): Promise<string> {
         model: "google/gemini-2.5-flash",
         messages: [{
           role: "user",
-          content: `Translate the following WhatsApp message into ${lang}. Preserve emojis, numbers, dates, line breaks, and *markdown* formatting exactly. Do not add commentary, quotes, or explanations — output only the translation. Make it sound completely natural to a native speaker, not a literal translation.${styleGuide ? `\n\nSTYLE GUIDE:\n${styleGuide}` : ""}\n\n---\n${text}`,
+          content: `Translate the following WhatsApp message into ${lang}. Preserve emojis, numbers, line breaks, and *markdown* formatting exactly. Do not add commentary, quotes, or explanations — output only the translation.\n\n---\n${text}`,
         }],
       }),
     });
