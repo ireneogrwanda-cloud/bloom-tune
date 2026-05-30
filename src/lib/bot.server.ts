@@ -2,12 +2,14 @@
 // Handles onboarding state, temperature logging, and AI-powered responses.
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { sendWhatsAppText } from "./whatsapp.server";
+import { sendWhatsAppText, sendWhatsAppImage } from "./whatsapp.server";
 import {
   parseTemperature,
   predictCycle,
   isoDate,
+  addDays,
   type TempPoint,
+  type CycleStats,
 } from "./fertility";
 
 const DISCLAIMER = "ℹ️ This bot helps you track fertility patterns.";
@@ -38,6 +40,7 @@ const COUNTRY_LANG: Array<[string, string]> = [
   ["81", "Japanese"], ["82", "Korean"],
   ["66", "Thai"], ["84", "Vietnamese"], ["62", "Indonesian"], ["60", "Malay"],
   ["63", "Filipino"],
+  ["250", "Kinyarwanda"],
   ["254", "Swahili"], ["255", "Swahili"], ["256", "Swahili"],
   ["234", "English"], ["233", "English"],
 ];
@@ -116,6 +119,124 @@ async function reply(userId: string | null, to: string, body: string) {
   await logOutbound(userId, translated);
 }
 
+async function replyImage(userId: string | null, to: string, imageUrl: string, caption?: string) {
+  const cap = caption ? await translate(caption, detectLanguage(to)) : undefined;
+  await sendWhatsAppImage(to, imageUrl, cap);
+  if (cap) await logOutbound(userId, `[chart] ${cap}`);
+}
+
+// Parse optional day-number prefix/suffix alongside a temperature.
+// Accepts "36.7", "36.7 d5", "d5 36.7", "day 12 36.7", "36.7 day 12".
+function parseTempAndDay(text: string): { temp: number; day?: number } | null {
+  const temp = parseTemperature(text);
+  if (temp === null) return null;
+  const m = text.match(/\b(?:d|day|cycle\s*day)\s*(\d{1,2})\b/i);
+  const day = m ? Math.max(1, Math.min(60, parseInt(m[1], 10))) : undefined;
+  return { temp, day };
+}
+
+// Build a public chart image URL using QuickChart (Chart.js renderer).
+// Green = infertile days, Red = fertile window, dashed line = ovulation.
+function buildChartUrl(args: {
+  avgCycleLength: number;
+  periodLength: number;
+  temps: TempPoint[];
+  stats: CycleStats;
+}): string {
+  const { avgCycleLength, periodLength, temps, stats } = args;
+  const totalDays = Math.max(avgCycleLength, stats.cycleDay, 28);
+  const labels = Array.from({ length: totalDays }, (_, i) => i + 1);
+  const data = labels.map((d) => {
+    const t = temps.find((p) => p.day === d);
+    return t ? t.temp : null;
+  });
+
+  const cfg = {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "BBT (°C)",
+          data,
+          borderColor: "rgb(30,64,175)",
+          backgroundColor: "rgba(30,64,175,0.15)",
+          spanGaps: true,
+          tension: 0.3,
+          pointRadius: 4,
+          pointBackgroundColor: "rgb(30,64,175)",
+        },
+      ],
+    },
+    options: {
+      plugins: {
+        title: { display: true, text: `Cycle overview — day ${stats.cycleDay} of ~${avgCycleLength}` },
+        legend: { display: false },
+        annotation: {
+          annotations: {
+            periodBox: {
+              type: "box",
+              xMin: 0.5,
+              xMax: periodLength + 0.5,
+              backgroundColor: "rgba(190,18,60,0.18)",
+              borderWidth: 0,
+              label: { display: true, content: "Period", position: "start", color: "#9f1239" },
+            },
+            preFertile: {
+              type: "box",
+              xMin: periodLength + 0.5,
+              xMax: stats.fertileStartDay - 0.5,
+              backgroundColor: "rgba(34,197,94,0.22)",
+              borderWidth: 0,
+              label: { display: true, content: "Infertile", position: "center", color: "#166534" },
+            },
+            fertile: {
+              type: "box",
+              xMin: stats.fertileStartDay - 0.5,
+              xMax: stats.fertileEndDay + 0.5,
+              backgroundColor: "rgba(239,68,68,0.3)",
+              borderWidth: 0,
+              label: { display: true, content: "Fertile", position: "center", color: "#991b1b" },
+            },
+            postFertile: {
+              type: "box",
+              xMin: stats.fertileEndDay + 0.5,
+              xMax: totalDays + 0.5,
+              backgroundColor: "rgba(34,197,94,0.22)",
+              borderWidth: 0,
+              label: { display: true, content: "Infertile", position: "center", color: "#166534" },
+            },
+            ovulation: {
+              type: "line",
+              xMin: stats.estimatedOvulationDay,
+              xMax: stats.estimatedOvulationDay,
+              borderColor: "rgb(220,38,38)",
+              borderWidth: 2,
+              borderDash: [6, 4],
+              label: { display: true, content: "Ovulation", position: "end", color: "#991b1b" },
+            },
+            today: {
+              type: "line",
+              xMin: stats.cycleDay,
+              xMax: stats.cycleDay,
+              borderColor: "rgb(15,23,42)",
+              borderWidth: 1,
+              borderDash: [2, 2],
+              label: { display: true, content: "Today", position: "start", color: "#0f172a" },
+            },
+          },
+        },
+      },
+      scales: {
+        y: { min: 35.5, max: 37.5, title: { display: true, text: "°C" } },
+        x: { title: { display: true, text: "Cycle day" } },
+      },
+    },
+  };
+  const json = JSON.stringify(cfg);
+  return `https://quickchart.io/chart?w=720&h=420&bkg=white&v=4&c=${encodeURIComponent(json)}`;
+}
+
 
 async function getOrCreateActiveCycle(userId: string, cycleStartIso: string) {
   const { data: existing } = await supabaseAdmin
@@ -186,8 +307,10 @@ export async function handleIncomingMessage(args: {
       from,
       [
         "📋 Commands:",
-        "• Send a number (e.g. 36.7) to log today's basal temperature",
-        "• *status* — your current cycle day & fertility window",
+        "• Send a number (e.g. *36.7*) to log today's basal temperature",
+        "• Add a day to log a past day, e.g. *36.7 d5* or *day 5 36.7*",
+        "• *status* — current cycle day, fertile window, and chart",
+        "• *chart* — send your cycle chart now",
         "• *reset cycle* — mark today as day 1 of a new cycle",
         "• *help* — show this menu",
         "",
@@ -219,15 +342,15 @@ export async function handleIncomingMessage(args: {
     return;
   }
 
-  if (lower === "status") {
+  if (lower === "status" || lower === "chart") {
     await sendStatus(profile, from);
     return;
   }
 
-  // Try parsing a temperature
-  const temp = parseTemperature(trimmed);
-  if (temp !== null) {
-    await handleTempLog(profile, from, temp);
+  // Try parsing a temperature (with optional day number)
+  const parsed = parseTempAndDay(trimmed);
+  if (parsed) {
+    await handleTempLog(profile, from, parsed.temp, parsed.day);
     return;
   }
 
@@ -235,7 +358,7 @@ export async function handleIncomingMessage(args: {
   await reply(
     profile.id,
     from,
-    `I didn't catch a temperature in that. Send a number like *36.7* to log today's BBT, or *help* for commands.\n\n${DISCLAIMER}`,
+    `I didn't catch a temperature in that. Send a number like *36.7* (or *36.7 d5* to log a past day), or *help* for commands.\n\n${DISCLAIMER}`,
   );
 }
 
@@ -265,38 +388,55 @@ async function sendStatus(profile: any, from: string) {
     temps,
   });
 
-  const ovText = stats.ovulationConfirmed
-    ? `Ovulation appears to have occurred around cycle day ${stats.estimatedOvulationDay} (confirmed by temperature rise).`
-    : `Estimated ovulation: cycle day ${stats.estimatedOvulationDay} (calendar prediction — log more temps to confirm).`;
+  const ovDate = isoDate(addDays(cycleStart, stats.estimatedOvulationDay - 1));
+  const nextPeriodDate = isoDate(addDays(cycleStart, profile.avg_cycle_length));
+  const fertileStartDate = isoDate(addDays(cycleStart, stats.fertileStartDay - 1));
+  const fertileEndDate = isoDate(addDays(cycleStart, stats.fertileEndDay - 1));
 
-  await reply(
-    profile.id,
-    from,
-    [
-      `📊 *Status* — cycle started ${cycle.started_on}`,
-      stats.message,
-      "",
-      `🌱 Fertile window: cycle days ${stats.fertileStartDay}–${stats.fertileEndDay}`,
-      ovText,
-      `📈 Logs this cycle: ${temps.length}`,
-      "",
-      DISCLAIMER,
-    ].join("\n"),
-  );
+  const ovText = stats.ovulationConfirmed
+    ? `🥚 Ovulation: ~day ${stats.estimatedOvulationDay} (${ovDate}) — confirmed by temperature rise.`
+    : `🥚 Predicted ovulation: day ${stats.estimatedOvulationDay} (${ovDate}).`;
+
+  const caption = [
+    `📊 *Status* — cycle started ${cycle.started_on}`,
+    stats.message,
+    "",
+    `🔴 Fertile window: days ${stats.fertileStartDay}–${stats.fertileEndDay} (${fertileStartDate} → ${fertileEndDate})`,
+    `🟢 Other days are low-fertility.`,
+    ovText,
+    `🩸 Next period predicted: ${nextPeriodDate}`,
+    `📈 Logs this cycle: ${temps.length}`,
+    "",
+    DISCLAIMER,
+  ].join("\n");
+
+  const chartUrl = buildChartUrl({
+    avgCycleLength: profile.avg_cycle_length,
+    periodLength: profile.period_length,
+    temps,
+    stats,
+  });
+  await replyImage(profile.id, from, chartUrl, caption);
 }
 
-async function handleTempLog(profile: any, from: string, temp: number) {
+async function handleTempLog(profile: any, from: string, temp: number, day?: number) {
   const today = isoDate(new Date());
   const cycle = await getOrCreateActiveCycle(profile.id, today);
+  const cycleStart = new Date(cycle.started_on);
 
-  // Upsert today's log
+  // Compute logged_for date: if day provided, anchor to cycle start, else today.
+  const loggedFor = day
+    ? isoDate(addDays(cycleStart, day - 1))
+    : today;
+
+  // Upsert log for that date
   const { error: upErr } = await supabaseAdmin
     .from("temperature_logs")
     .upsert(
       {
         user_id: profile.id,
         cycle_id: cycle.id,
-        logged_for: today,
+        logged_for: loggedFor,
         temp_celsius: temp,
         source: "whatsapp",
       },
@@ -315,7 +455,6 @@ async function handleTempLog(profile: any, from: string, temp: number) {
     .eq("cycle_id", cycle.id)
     .order("logged_for");
 
-  const cycleStart = new Date(cycle.started_on);
   const temps: TempPoint[] =
     (logs ?? []).map((l) => ({
       day: Math.floor(
@@ -352,19 +491,32 @@ async function handleTempLog(profile: any, from: string, temp: number) {
     recentTemps: temps.slice(-7),
   });
 
-  const body = [
-    `✅ Logged ${temp.toFixed(2)}°C for cycle day ${stats.cycleDay}.`,
+  const ovDate = isoDate(addDays(cycleStart, stats.estimatedOvulationDay - 1));
+  const nextPeriodDate = isoDate(addDays(cycleStart, profile.avg_cycle_length));
+  const loggedDayNum = day ?? stats.cycleDay;
+
+  const caption = [
+    `✅ Logged ${temp.toFixed(2)}°C for cycle day ${loggedDayNum} (${loggedFor}).`,
     "",
     stats.message,
     "",
-    `🌱 Fertile window: days ${stats.fertileStartDay}–${stats.fertileEndDay}`,
-    "",
+    `🔴 Fertile window: days ${stats.fertileStartDay}–${stats.fertileEndDay}`,
+    `🟢 Infertile: the rest of the cycle`,
+    `🥚 Predicted ovulation: day ${stats.estimatedOvulationDay} (${ovDate})`,
+    `🩸 Next period predicted: ${nextPeriodDate}`,
+    aiText ? "" : "",
     aiText,
     "",
     DISCLAIMER,
   ].join("\n");
 
-  await reply(profile.id, from, body);
+  const chartUrl = buildChartUrl({
+    avgCycleLength: profile.avg_cycle_length,
+    periodLength: profile.period_length,
+    temps,
+    stats,
+  });
+  await replyImage(profile.id, from, chartUrl, caption);
 }
 
 async function generateAiCommentary(input: {
