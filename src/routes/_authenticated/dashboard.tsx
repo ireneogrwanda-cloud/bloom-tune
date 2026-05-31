@@ -110,7 +110,7 @@ function Dashboard() {
           <StatCard label="Cycle day" value={String(stats.cycleDay)} sub={`Started ${activeCycle.started_on}`} />
           <StatCard
             label="Status"
-            value={stats.status === "fertile" || stats.status === "ovulation" ? "Fertile 🌱" : stats.status === "menstrual" ? "Period 🩸" : "Low"}
+            value={stats.status === "fertile" || stats.status === "ovulation" ? "Fertile 🌱" : stats.status === "early-cycle" ? "Early cycle 🩸" : "Low"}
             sub={stats.message}
           />
           <StatCard
