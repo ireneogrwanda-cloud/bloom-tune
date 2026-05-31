@@ -10,8 +10,9 @@ export type CycleStats = {
   estimatedOvulationDay: number;
   fertileStartDay: number;
   fertileEndDay: number;
-  status: "menstrual" | "pre-fertile" | "fertile" | "ovulation" | "post-ovulation" | "unknown";
+  status: "early-cycle" | "pre-fertile" | "fertile" | "ovulation" | "post-ovulation" | "unknown";
   ovulationConfirmed: boolean;
+  confidence: "low" | "medium" | "high";
   message: string;
 };
 
@@ -60,18 +61,48 @@ export function predictCycle(args: {
   const calendarOv = avgCycleLength - 14;
   const detectedOv = detectOvulation(temps);
   const ovulationDay = detectedOv ?? calendarOv;
-  const fertileStartDay = Math.max(1, ovulationDay - 5);
-  const fertileEndDay = ovulationDay + 1;
+
+  // Confidence depends on how much data we have AND whether BBT confirmed ovulation.
+  let confidence: CycleStats["confidence"];
+  if (detectedOv !== null) confidence = "high";
+  else if (temps.length >= 9) confidence = "medium";
+  else confidence = "low";
+
+  // Fertile window logic — be CONSERVATIVE when confidence is low.
+  // Rule the user asked for: when unsure, mark days RED (potentially fertile).
+  // Only mark days GREEN when we're confident they're infertile.
+  let fertileStartDay: number;
+  let fertileEndDay: number;
+
+  if (confidence === "high") {
+    // BBT confirmed — narrow, accurate window.
+    fertileStartDay = Math.max(1, ovulationDay - 5);
+    fertileEndDay = ovulationDay + 1;
+  } else if (confidence === "medium") {
+    // Some data, no BBT rise yet — moderately wide window.
+    fertileStartDay = Math.max(1, ovulationDay - 7);
+    fertileEndDay = ovulationDay + 3;
+  } else {
+    // Very little data — assume almost every non-period day could be fertile.
+    // Only the bleeding days (if any) and late luteal phase are "safer".
+    fertileStartDay = Math.max(1, Math.min(periodLength + 1, 6));
+    fertileEndDay = Math.max(ovulationDay + 4, avgCycleLength - 5);
+  }
 
   let status: CycleStats["status"] = "unknown";
   let message = "";
 
-  if (cycleDay <= periodLength) {
-    status = "menstrual";
-    message = `You're on day ${cycleDay} of your period. Fertility is very low right now.`;
+  // We no longer assert the user is bleeding — period length is just an estimate
+  // and varies per person. Talk about cycle day instead.
+  if (cycleDay <= periodLength && confidence !== "high") {
+    status = "early-cycle";
+    message = `You're on day ${cycleDay} of your cycle. Fertility is typically low in the early days.`;
   } else if (cycleDay < fertileStartDay) {
     status = "pre-fertile";
-    message = `Day ${cycleDay}. Pre-fertile window — pregnancy chance is low. Your fertile window starts around day ${fertileStartDay}.`;
+    message =
+      confidence === "low"
+        ? `Day ${cycleDay} of your cycle. With limited data so far, treat this as potentially fertile to be safe.`
+        : `Day ${cycleDay}. Pre-fertile window — pregnancy chance is low. Your fertile window starts around day ${fertileStartDay}.`;
   } else if (cycleDay >= fertileStartDay && cycleDay < ovulationDay) {
     status = "fertile";
     message = `Day ${cycleDay}. You're in your fertile window. Ovulation expected around day ${ovulationDay}.`;
@@ -80,10 +111,13 @@ export function predictCycle(args: {
     message = `Day ${cycleDay}. Estimated ovulation day — peak fertility.`;
   } else if (cycleDay <= fertileEndDay) {
     status = "fertile";
-    message = `Day ${cycleDay}. Still potentially fertile (post-ovulation). Window closes after day ${fertileEndDay}.`;
+    message = `Day ${cycleDay}. Still potentially fertile. Window closes after day ${fertileEndDay}.`;
   } else if (cycleDay <= avgCycleLength) {
     status = "post-ovulation";
-    message = `Day ${cycleDay}. Luteal phase — fertility is low. Next period expected around day ${avgCycleLength + 1}.`;
+    message =
+      confidence === "high"
+        ? `Day ${cycleDay}. Luteal phase confirmed — fertility is low. Next period expected around day ${avgCycleLength + 1}.`
+        : `Day ${cycleDay}. Likely post-ovulation, but without a confirmed temperature rise we can't be certain.`;
   } else {
     status = "post-ovulation";
     message = `Day ${cycleDay}. Cycle is longer than average; period may start any day.`;
@@ -96,6 +130,7 @@ export function predictCycle(args: {
     fertileEndDay,
     status,
     ovulationConfirmed: detectedOv !== null,
+    confidence,
     message,
   };
 }
