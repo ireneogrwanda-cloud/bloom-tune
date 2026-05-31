@@ -54,20 +54,66 @@ function detectLanguage(phone: string): string {
   return "English";
 }
 
+const LANG_STYLE: Record<string, string> = {
+  Kinyarwanda: `STYLE GUIDE for Kinyarwanda — produce natural, grammatically perfect Kinyarwanda. Follow these conventions EXACTLY:
+
+Vocabulary mapping:
+- temperature → "ubushyuhe bw'umubiri" (or keep "temperature" when natural)
+- "You measured 36.64°C on day 2" → "Wapimye 36.64°C ku munsi wa 2"
+- cycle / month → "ukwezi" (NOT "ikizinga")
+- cycle day N → "umunsi wa N w'ukwezi"
+- period / menstruation → "imihango"
+- "day N of your period" → "umunsi wa N w'imihango yawe"
+- fertile / fertility → "uburumbuke" / "kurumbuka"
+- fertile window → "Igihe cyo kurumbuka"
+- infertile → "Ntabwo urumbuka"
+- ovulation → "ukumanuka kw'intanga" or "gusama"
+- "ovulation expected on day X" → "Ukumanuka kw'intanga biteganijwe: ku munsi wa X"
+- next period → "Imihango itaha iteganijwe"
+- date → "italiki" or use the date directly
+- low fertility → "uburumbuke buri hasi"
+
+Emojis (KEEP exactly): ✅ 🔴 🟢 🥚 🩸 💬 ℹ️
+
+Tone: warm, respectful, second-person singular ("wawe", "uri"), like a caring health companion. Use natural flowing sentences, NOT robotic word-for-word translation.
+
+GOLD-STANDARD EXAMPLE (this is the target quality and phrasing):
+"""
+✅ Wapimye 36.64°C ku munsi wa 2 w'ukwezi (2026-05-30).
+
+Uri ku munsi wa 2 w'imihango yawe. Uburumbuke buri hasi cyane ubu.
+
+🔴 Igihe cyo kurumbuka: giteganijwe hagati y'umunsi 9–15 yu kwezi kwawe.
+
+🟢 Ntabwo urumbuka: iminsi isigaye y'ukwezi
+
+🥚 Ukumanuka kw'intanga biteganijwe: ku munsi wa 14 (2026-06-11)
+
+🩸 Imihango itaha iteganijwe: 2026-06-26
+
+💬 Ubushyuhe bwawe buri hasi, nk'uko bisanzwe iyo uri mu mihango, ibi bikaba bisanzwe kuko umubiri wawe uba witegura ukwezi gushya. Kubera ko uri mu gihe cy'imihango, uburumbuke bwawe buri hasi. Mu cyumweru gitaha, ushobora kwitega ko ubushyuhe buzakomeza kuba hamwe mbere yuko igihe cyo cy'uburumbuke gitangira.
+
+ℹ️ Iyi bot igufasha gukurikirana imiterere y'uburumbuke.
+"""
+
+Match this phrasing style, vocabulary, and flow whenever the source content is similar.`,
+};
+
 async function translate(text: string, lang: string): Promise<string> {
   if (lang === "English" || !text.trim()) return text;
   const key = process.env.LOVABLE_API_KEY;
   if (!key) return text;
+  const styleGuide = LANG_STYLE[lang];
+  const prompt = styleGuide
+    ? `Translate the following WhatsApp message into ${lang}, following this style guide strictly:\n\n${styleGuide}\n\nPreserve emojis, numbers, line breaks, and *markdown* formatting. Do not add commentary, quotes, or explanations — output only the translation.\n\n---\n${text}`
+    : `Translate the following WhatsApp message into ${lang}. Preserve emojis, numbers, line breaks, and *markdown* formatting exactly. Do not add commentary, quotes, or explanations — output only the translation.\n\n---\n${text}`;
   try {
     const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
-        messages: [{
-          role: "user",
-          content: `Translate the following WhatsApp message into ${lang}. Preserve emojis, numbers, line breaks, and *markdown* formatting exactly. Do not add commentary, quotes, or explanations — output only the translation.\n\n---\n${text}`,
-        }],
+        messages: [{ role: "user", content: prompt }],
       }),
     });
     if (!res.ok) return text;
