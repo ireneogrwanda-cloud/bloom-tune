@@ -541,14 +541,27 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
   const nextPeriodDate = isoDate(addDays(cycleStart, profile.avg_cycle_length));
   const loggedDayNum = day ?? stats.cycleDay;
 
+  const fertileNote =
+    stats.confidence === "low"
+      ? "🔴 Potentially fertile (wide estimate — we need more daily temperatures to narrow it down)"
+      : stats.confidence === "medium"
+        ? "🔴 Likely fertile window"
+        : "🔴 Fertile window";
+  const greenNote =
+    stats.confidence === "high"
+      ? "🟢 Confirmed low-fertility days: after the temperature rise until next period"
+      : "🟢 Only days we're confident are low-fertility will be marked green — keep logging daily to unlock this";
+
   const caption = [
     `✅ Logged ${temp.toFixed(2)}°C for cycle day ${loggedDayNum} (${loggedFor}).`,
     "",
     stats.message,
     "",
-    `🔴 Fertile window: days ${stats.fertileStartDay}–${stats.fertileEndDay}`,
-    `🟢 Infertile: the rest of the cycle`,
-    `🥚 Predicted ovulation: day ${stats.estimatedOvulationDay} (${ovDate})`,
+    `${fertileNote}: days ${stats.fertileStartDay}–${stats.fertileEndDay}`,
+    greenNote,
+    stats.ovulationConfirmed
+      ? `🥚 Ovulation confirmed around day ${stats.estimatedOvulationDay} (${ovDate})`
+      : `🥚 Predicted ovulation: day ${stats.estimatedOvulationDay} (${ovDate}) — estimate`,
     `🩸 Next period predicted: ${nextPeriodDate}`,
     aiText ? "" : "",
     aiText,
