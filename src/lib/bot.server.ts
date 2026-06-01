@@ -420,7 +420,7 @@ export async function handleIncomingMessage(args: {
   await reply(
     profile.id,
     from,
-    `I didn't catch a temperature in that. Send a number like *36.7* (or *36.7 d5* to log a past day), or *help* for commands.\n\n${DISCLAIMER}`,
+    `I didn't catch a temperature in that. Send a number like *36.7* (or *36.7 d5* to log a past day), or *help* for commands.`,
   );
 }
 
