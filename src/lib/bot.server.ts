@@ -356,7 +356,7 @@ export async function handleIncomingMessage(args: {
       return;
     }
     profile = updated;
-    const welcome = `👋 Welcome! I've set up a new account for you.\n\n${DISCLAIMER}`;
+    const welcome = `👋 Welcome! I've set up a new account for you. Send your daily basal temperature (e.g. *36.7*) to start tracking. Type *help* anytime to see commands.`;
     await sendWhatsAppText(from, await translate(welcome, detectLanguage(from)));
   }
   await logInbound(profile.id, from, waMessageId, trimmed, raw);
