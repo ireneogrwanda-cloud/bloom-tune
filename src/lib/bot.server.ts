@@ -356,7 +356,19 @@ export async function handleIncomingMessage(args: {
       return;
     }
     profile = updated;
-    const welcome = `👋 Welcome! I've set up a new account for you. Send your daily basal temperature (e.g. *36.7*) to start tracking. Type *help* anytime to see commands.`;
+    const welcome = `👋 Welcome! I've set up a new account for you.
+
+🌡️ *How to use a BBT (basal body thermometer) properly:*
+• Use a dedicated BBT thermometer (0.01°C precision), not a regular fever one.
+• Take your temperature *first thing in the morning*, before getting out of bed, talking, drinking, or even sitting up.
+• Measure at roughly the *same time every day* (within ~30 min).
+• Aim for at least *4–5 hours of uninterrupted sleep* before measuring.
+• Measure the same way every day — orally (under the tongue), vaginally, or rectally — don't mix methods.
+• Then send the number here (e.g. *36.7*).
+
+📅 *When to start:* ideally from *day 1 of your period* (first day of bleeding). Daily logs make predictions much more accurate.
+
+Type *help* anytime to see commands.`;
     await sendWhatsAppText(from, await translate(welcome, detectLanguage(from)));
   }
   await logInbound(profile.id, from, waMessageId, trimmed, raw);
@@ -476,7 +488,10 @@ async function sendStatus(profile: any, from: string) {
     `🩸 Next period predicted: ${nextPeriodDate}`,
     `📈 Logs this cycle: ${temps.length}`,
     historyNote,
+    "",
+    `ℹ️ These predictions update with every new temperature you log — expect them to shift as your cycle unfolds.`,
   ].join("\n");
+
 
   const chartUrl = buildChartUrl({
     avgCycleLength: stats.predictedCycleLength,
@@ -589,6 +604,8 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
       ? `🥚 Ovulation confirmed around day ${stats.estimatedOvulationDay} (${ovDate})`
       : `🥚 Predicted ovulation: day ${stats.estimatedOvulationDay} (${ovDate}) — estimate`,
     `🩸 Next period predicted: ${nextPeriodDate}`,
+    "",
+    `ℹ️ Predictions can shift with each new temperature — the more days you log, the more accurate they get.`,
     aiText ? "" : "",
     aiText,
   ].filter((l) => l !== null).join("\n");
