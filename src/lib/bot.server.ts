@@ -377,8 +377,6 @@ export async function handleIncomingMessage(args: {
         "• *chart* — send your cycle chart now",
         "• *reset cycle* — mark today as day 1 of a new cycle",
         "• *help* — show this menu",
-        "",
-        DISCLAIMER,
       ].join("\n"),
     );
     return;
