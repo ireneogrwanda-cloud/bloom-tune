@@ -12,7 +12,25 @@ import {
   type CycleStats,
 } from "./fertility";
 
-const DISCLAIMER = "ℹ️ This bot helps you track fertility patterns.";
+// Fetch lengths of completed past cycles (most-recent first, capped at 12).
+async function getCycleHistory(userId: string): Promise<number[]> {
+  const { data } = await supabaseAdmin
+    .from("cycles")
+    .select("started_on, ended_on")
+    .eq("user_id", userId)
+    .eq("status", "completed")
+    .not("ended_on", "is", null)
+    .order("started_on", { ascending: false })
+    .limit(12);
+  if (!data) return [];
+  return data
+    .map((c) => {
+      const start = new Date(c.started_on).getTime();
+      const end = new Date(c.ended_on as string).getTime();
+      return Math.round((end - start) / 86_400_000);
+    })
+    .filter((n) => n >= 20 && n <= 45);
+}
 
 // Map of WhatsApp country dialing code -> language name (longest prefix wins).
 const COUNTRY_LANG: Array<[string, string]> = [
@@ -338,7 +356,7 @@ export async function handleIncomingMessage(args: {
       return;
     }
     profile = updated;
-    const welcome = `👋 Welcome! I've set up a new account for you.\n\n${DISCLAIMER}`;
+    const welcome = `👋 Welcome! I've set up a new account for you. Send your daily basal temperature (e.g. *36.7*) to start tracking. Type *help* anytime to see commands.`;
     await sendWhatsAppText(from, await translate(welcome, detectLanguage(from)));
   }
   await logInbound(profile.id, from, waMessageId, trimmed, raw);
@@ -359,8 +377,6 @@ export async function handleIncomingMessage(args: {
         "• *chart* — send your cycle chart now",
         "• *reset cycle* — mark today as day 1 of a new cycle",
         "• *help* — show this menu",
-        "",
-        DISCLAIMER,
       ].join("\n"),
     );
     return;
@@ -404,7 +420,7 @@ export async function handleIncomingMessage(args: {
   await reply(
     profile.id,
     from,
-    `I didn't catch a temperature in that. Send a number like *36.7* (or *36.7 d5* to log a past day), or *help* for commands.\n\n${DISCLAIMER}`,
+    `I didn't catch a temperature in that. Send a number like *36.7* (or *36.7 d5* to log a past day), or *help* for commands.`,
   );
 }
 
@@ -426,22 +442,29 @@ async function sendStatus(profile: any, from: string) {
       date: l.logged_for,
     }));
 
+  const history = await getCycleHistory(profile.id);
   const stats = predictCycle({
     cycleStart,
     today: new Date(),
     avgCycleLength: profile.avg_cycle_length,
     periodLength: profile.period_length,
     temps,
+    cycleHistory: history,
   });
 
   const ovDate = isoDate(addDays(cycleStart, stats.estimatedOvulationDay - 1));
-  const nextPeriodDate = isoDate(addDays(cycleStart, profile.avg_cycle_length));
+  const nextPeriodDate = isoDate(addDays(cycleStart, stats.predictedCycleLength));
   const fertileStartDate = isoDate(addDays(cycleStart, stats.fertileStartDay - 1));
   const fertileEndDate = isoDate(addDays(cycleStart, stats.fertileEndDay - 1));
 
   const ovText = stats.ovulationConfirmed
     ? `🥚 Ovulation: ~day ${stats.estimatedOvulationDay} (${ovDate}) — confirmed by temperature rise.`
     : `🥚 Predicted ovulation: day ${stats.estimatedOvulationDay} (${ovDate}).`;
+
+  const historyNote =
+    history.length >= 2
+      ? `📚 Based on ${history.length} past cycle${history.length === 1 ? "" : "s"} (avg ${stats.predictedCycleLength}d, ±${stats.cycleLengthStdDev}d)`
+      : `📚 Add more cycles to sharpen predictions — currently using your ${profile.avg_cycle_length}-day default.`;
 
   const caption = [
     `📊 *Status* — cycle started ${cycle.started_on}`,
@@ -452,12 +475,11 @@ async function sendStatus(profile: any, from: string) {
     ovText,
     `🩸 Next period predicted: ${nextPeriodDate}`,
     `📈 Logs this cycle: ${temps.length}`,
-    "",
-    DISCLAIMER,
+    historyNote,
   ].join("\n");
 
   const chartUrl = buildChartUrl({
-    avgCycleLength: profile.avg_cycle_length,
+    avgCycleLength: stats.predictedCycleLength,
     periodLength: profile.period_length,
     temps,
     stats,
@@ -510,12 +532,14 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
       date: l.logged_for,
     }));
 
+  const history = await getCycleHistory(profile.id);
   const stats = predictCycle({
     cycleStart,
     today: new Date(),
     avgCycleLength: profile.avg_cycle_length,
     periodLength: profile.period_length,
     temps,
+    cycleHistory: history,
   });
 
   // Update cycle prediction
@@ -538,19 +562,21 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
   });
 
   const ovDate = isoDate(addDays(cycleStart, stats.estimatedOvulationDay - 1));
-  const nextPeriodDate = isoDate(addDays(cycleStart, profile.avg_cycle_length));
+  const nextPeriodDate = isoDate(addDays(cycleStart, stats.predictedCycleLength));
   const loggedDayNum = day ?? stats.cycleDay;
 
   const fertileNote =
     stats.confidence === "low"
-      ? "🔴 Potentially fertile (wide estimate — we need more daily temperatures to narrow it down)"
+      ? "🔴 Potentially fertile (wide estimate — log a full cycle or two to narrow it down)"
       : stats.confidence === "medium"
         ? "🔴 Likely fertile window"
         : "🔴 Fertile window";
   const greenNote =
     stats.confidence === "high"
       ? "🟢 Confirmed low-fertility days: after the temperature rise until next period"
-      : "🟢 Only days we're confident are low-fertility will be marked green — keep logging daily to unlock this";
+      : stats.confidence === "medium"
+        ? "🟢 Other days are likely low-fertility based on your cycle history"
+        : "🟢 Only days we're confident are low-fertility will be marked green — keep logging daily to unlock this";
 
   const caption = [
     `✅ Logged ${temp.toFixed(2)}°C for cycle day ${loggedDayNum} (${loggedFor}).`,
@@ -565,12 +591,10 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
     `🩸 Next period predicted: ${nextPeriodDate}`,
     aiText ? "" : "",
     aiText,
-    "",
-    DISCLAIMER,
-  ].join("\n");
+  ].filter((l) => l !== null).join("\n");
 
   const chartUrl = buildChartUrl({
-    avgCycleLength: profile.avg_cycle_length,
+    avgCycleLength: stats.predictedCycleLength,
     periodLength: profile.period_length,
     temps,
     stats,

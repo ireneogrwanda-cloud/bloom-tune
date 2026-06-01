@@ -1,7 +1,15 @@
-// Pure fertility-prediction helpers. Safe to import on client and server.
+// Natural-Cycles-inspired fertility prediction.
 //
-// IMPORTANT: This is for educational tracking only — not a contraceptive
-// method and not medical advice.
+// Algorithm:
+//  1. Cycle-length history → mean + sample standard deviation.
+//  2. Predicted ovulation day = mean − 14 (luteal phase is biologically
+//     stable at ~14 days, far less variable than follicular phase).
+//  3. Fertile window = [ov − 5 − buffer, ov + 1 + buffer] where buffer
+//     scales with cycle-length variability (more irregular ⇒ wider red zone).
+//  4. BBT 3-over-6 detection overrides the calendar estimate and shrinks
+//     the window to a narrow, confirmed range (high confidence).
+//  5. When unsure (cycleDay inside or near the predicted window, low data),
+//     mark RED. Only days clearly outside the buffered window are GREEN.
 
 export type TempPoint = { day: number; temp: number; date: string };
 
@@ -13,12 +21,13 @@ export type CycleStats = {
   status: "early-cycle" | "pre-fertile" | "fertile" | "ovulation" | "post-ovulation" | "unknown";
   ovulationConfirmed: boolean;
   confidence: "low" | "medium" | "high";
+  predictedCycleLength: number;
+  cycleLengthStdDev: number;
   message: string;
 };
 
 export function daysBetween(a: Date, b: Date): number {
-  const ms = b.getTime() - a.getTime();
-  return Math.floor(ms / (1000 * 60 * 60 * 24));
+  return Math.floor((b.getTime() - a.getTime()) / 86_400_000);
 }
 
 export function addDays(d: Date, n: number): Date {
@@ -31,9 +40,18 @@ export function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-// Detect ovulation using the 3-over-6 BBT rule.
-// Returns the cycle-day of ovulation (the day BEFORE the first elevated temp)
-// or null if not yet detectable.
+function mean(xs: number[]): number {
+  return xs.reduce((s, x) => s + x, 0) / xs.length;
+}
+
+function stddev(xs: number[]): number {
+  if (xs.length < 2) return 0;
+  const m = mean(xs);
+  const v = xs.reduce((s, x) => s + (x - m) ** 2, 0) / (xs.length - 1);
+  return Math.sqrt(v);
+}
+
+// 3-over-6 BBT rule. Returns ovulation cycle-day (day before first elevated temp).
 export function detectOvulation(points: TempPoint[]): number | null {
   if (points.length < 9) return null;
   const sorted = [...points].sort((a, b) => a.day - b.day);
@@ -51,58 +69,54 @@ export function detectOvulation(points: TempPoint[]): number | null {
 export function predictCycle(args: {
   cycleStart: Date;
   today: Date;
-  avgCycleLength: number;
+  avgCycleLength: number; // user-provided fallback
   periodLength: number;
   temps: TempPoint[];
+  cycleHistory?: number[]; // lengths of completed past cycles
 }): CycleStats {
-  const { cycleStart, today, avgCycleLength, periodLength, temps } = args;
+  const { cycleStart, today, avgCycleLength, periodLength, temps, cycleHistory = [] } = args;
   const cycleDay = daysBetween(cycleStart, today) + 1;
 
-  const calendarOv = avgCycleLength - 14;
+  // ---- 1. Cycle-length model -------------------------------------------------
+  const validHistory = cycleHistory.filter((n) => n >= 20 && n <= 45);
+  const predictedCycleLength =
+    validHistory.length >= 2 ? Math.round(mean(validHistory)) : avgCycleLength;
+  const sd = validHistory.length >= 3 ? stddev(validHistory) : 2.5; // assume ±2.5d when unknown
+
+  // ---- 2. Ovulation estimate -------------------------------------------------
+  const calendarOv = predictedCycleLength - 14;
   const detectedOv = detectOvulation(temps);
   const ovulationDay = detectedOv ?? calendarOv;
 
-  // Confidence depends on how much data we have AND whether BBT confirmed ovulation.
+  // ---- 3. Confidence ---------------------------------------------------------
   let confidence: CycleStats["confidence"];
   if (detectedOv !== null) confidence = "high";
-  else if (temps.length >= 9) confidence = "medium";
+  else if (validHistory.length >= 3) confidence = "medium";
   else confidence = "low";
 
-  // Fertile window logic — be CONSERVATIVE when confidence is low.
-  // Rule the user asked for: when unsure, mark days RED (potentially fertile).
-  // Only mark days GREEN when we're confident they're infertile.
-  let fertileStartDay: number;
-  let fertileEndDay: number;
+  // ---- 4. Fertile window with variability buffer -----------------------------
+  // NC-style: sperm survive ~5d before ovulation, egg viable ~1d after.
+  // Add ceil(sd) extra days on each side to absorb cycle-length variability.
+  // When confidence is low, force a wider buffer so unsure days stay RED.
+  const buffer =
+    confidence === "high" ? 0 : confidence === "medium" ? Math.max(1, Math.ceil(sd)) : Math.max(3, Math.ceil(sd) + 2);
 
-  if (confidence === "high") {
-    // BBT confirmed — narrow, accurate window.
-    fertileStartDay = Math.max(1, ovulationDay - 5);
-    fertileEndDay = ovulationDay + 1;
-  } else if (confidence === "medium") {
-    // Some data, no BBT rise yet — moderately wide window.
-    fertileStartDay = Math.max(1, ovulationDay - 7);
-    fertileEndDay = ovulationDay + 3;
-  } else {
-    // Very little data — assume almost every non-period day could be fertile.
-    // Only the bleeding days (if any) and late luteal phase are "safer".
-    fertileStartDay = Math.max(1, Math.min(periodLength + 1, 6));
-    fertileEndDay = Math.max(ovulationDay + 4, avgCycleLength - 5);
-  }
+  const fertileStartDay = Math.max(1, ovulationDay - 5 - buffer);
+  const fertileEndDay = ovulationDay + 1 + buffer;
 
+  // ---- 5. Status + human-readable message -----------------------------------
   let status: CycleStats["status"] = "unknown";
   let message = "";
 
-  // We no longer assert the user is bleeding — period length is just an estimate
-  // and varies per person. Talk about cycle day instead.
   if (cycleDay <= periodLength && confidence !== "high") {
     status = "early-cycle";
-    message = `You're on day ${cycleDay} of your cycle. Fertility is typically low in the early days.`;
+    message = `Day ${cycleDay} of your cycle. Fertility is typically low in the early days.`;
   } else if (cycleDay < fertileStartDay) {
     status = "pre-fertile";
     message =
       confidence === "low"
-        ? `Day ${cycleDay} of your cycle. With limited data so far, treat this as potentially fertile to be safe.`
-        : `Day ${cycleDay}. Pre-fertile window — pregnancy chance is low. Your fertile window starts around day ${fertileStartDay}.`;
+        ? `Day ${cycleDay}. With limited cycle history, your fertile window is a wide estimate — treat borderline days as potentially fertile.`
+        : `Day ${cycleDay}. Pre-fertile — pregnancy chance is low. Your fertile window starts around day ${fertileStartDay}.`;
   } else if (cycleDay >= fertileStartDay && cycleDay < ovulationDay) {
     status = "fertile";
     message = `Day ${cycleDay}. You're in your fertile window. Ovulation expected around day ${ovulationDay}.`;
@@ -112,15 +126,15 @@ export function predictCycle(args: {
   } else if (cycleDay <= fertileEndDay) {
     status = "fertile";
     message = `Day ${cycleDay}. Still potentially fertile. Window closes after day ${fertileEndDay}.`;
-  } else if (cycleDay <= avgCycleLength) {
+  } else if (cycleDay <= predictedCycleLength) {
     status = "post-ovulation";
     message =
       confidence === "high"
-        ? `Day ${cycleDay}. Luteal phase confirmed — fertility is low. Next period expected around day ${avgCycleLength + 1}.`
-        : `Day ${cycleDay}. Likely post-ovulation, but without a confirmed temperature rise we can't be certain.`;
+        ? `Day ${cycleDay}. Luteal phase confirmed by temperature rise — fertility is low. Next period expected around day ${predictedCycleLength + 1}.`
+        : `Day ${cycleDay}. Likely post-ovulation. Next period expected around day ${predictedCycleLength + 1}.`;
   } else {
     status = "post-ovulation";
-    message = `Day ${cycleDay}. Cycle is longer than average; period may start any day.`;
+    message = `Day ${cycleDay}. Cycle is running longer than the ${predictedCycleLength}-day average; period may start any day.`;
   }
 
   return {
@@ -131,12 +145,13 @@ export function predictCycle(args: {
     status,
     ovulationConfirmed: detectedOv !== null,
     confidence,
+    predictedCycleLength,
+    cycleLengthStdDev: Math.round(sd * 10) / 10,
     message,
   };
 }
 
-// Parse a temperature value from a free-text WhatsApp message.
-// Accepts "36.7", "36,55", "97.4F", "97.4 f"
+// Parse a temperature value from free-text. Accepts "36.7", "36,55", "97.4F".
 export function parseTemperature(text: string): number | null {
   const m = text.match(/(\d{2,3}[.,]\d{1,2})\s*([cCfF])?/);
   if (!m) return null;
