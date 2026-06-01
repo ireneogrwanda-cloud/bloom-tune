@@ -532,12 +532,14 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
       date: l.logged_for,
     }));
 
+  const history = await getCycleHistory(profile.id);
   const stats = predictCycle({
     cycleStart,
     today: new Date(),
     avgCycleLength: profile.avg_cycle_length,
     periodLength: profile.period_length,
     temps,
+    cycleHistory: history,
   });
 
   // Update cycle prediction
@@ -560,19 +562,21 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
   });
 
   const ovDate = isoDate(addDays(cycleStart, stats.estimatedOvulationDay - 1));
-  const nextPeriodDate = isoDate(addDays(cycleStart, profile.avg_cycle_length));
+  const nextPeriodDate = isoDate(addDays(cycleStart, stats.predictedCycleLength));
   const loggedDayNum = day ?? stats.cycleDay;
 
   const fertileNote =
     stats.confidence === "low"
-      ? "🔴 Potentially fertile (wide estimate — we need more daily temperatures to narrow it down)"
+      ? "🔴 Potentially fertile (wide estimate — log a full cycle or two to narrow it down)"
       : stats.confidence === "medium"
         ? "🔴 Likely fertile window"
         : "🔴 Fertile window";
   const greenNote =
     stats.confidence === "high"
       ? "🟢 Confirmed low-fertility days: after the temperature rise until next period"
-      : "🟢 Only days we're confident are low-fertility will be marked green — keep logging daily to unlock this";
+      : stats.confidence === "medium"
+        ? "🟢 Other days are likely low-fertility based on your cycle history"
+        : "🟢 Only days we're confident are low-fertility will be marked green — keep logging daily to unlock this";
 
   const caption = [
     `✅ Logged ${temp.toFixed(2)}°C for cycle day ${loggedDayNum} (${loggedFor}).`,
@@ -587,12 +591,10 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
     `🩸 Next period predicted: ${nextPeriodDate}`,
     aiText ? "" : "",
     aiText,
-    "",
-    DISCLAIMER,
-  ].join("\n");
+  ].filter((l) => l !== null).join("\n");
 
   const chartUrl = buildChartUrl({
-    avgCycleLength: profile.avg_cycle_length,
+    avgCycleLength: stats.predictedCycleLength,
     periodLength: profile.period_length,
     temps,
     stats,
