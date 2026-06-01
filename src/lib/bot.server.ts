@@ -12,7 +12,25 @@ import {
   type CycleStats,
 } from "./fertility";
 
-const DISCLAIMER = "ℹ️ This bot helps you track fertility patterns.";
+// Fetch lengths of completed past cycles (most-recent first, capped at 12).
+async function getCycleHistory(userId: string): Promise<number[]> {
+  const { data } = await supabaseAdmin
+    .from("cycles")
+    .select("started_on, ended_on")
+    .eq("user_id", userId)
+    .eq("status", "completed")
+    .not("ended_on", "is", null)
+    .order("started_on", { ascending: false })
+    .limit(12);
+  if (!data) return [];
+  return data
+    .map((c) => {
+      const start = new Date(c.started_on).getTime();
+      const end = new Date(c.ended_on as string).getTime();
+      return Math.round((end - start) / 86_400_000);
+    })
+    .filter((n) => n >= 20 && n <= 45);
+}
 
 // Map of WhatsApp country dialing code -> language name (longest prefix wins).
 const COUNTRY_LANG: Array<[string, string]> = [
