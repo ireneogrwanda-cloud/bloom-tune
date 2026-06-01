@@ -442,22 +442,29 @@ async function sendStatus(profile: any, from: string) {
       date: l.logged_for,
     }));
 
+  const history = await getCycleHistory(profile.id);
   const stats = predictCycle({
     cycleStart,
     today: new Date(),
     avgCycleLength: profile.avg_cycle_length,
     periodLength: profile.period_length,
     temps,
+    cycleHistory: history,
   });
 
   const ovDate = isoDate(addDays(cycleStart, stats.estimatedOvulationDay - 1));
-  const nextPeriodDate = isoDate(addDays(cycleStart, profile.avg_cycle_length));
+  const nextPeriodDate = isoDate(addDays(cycleStart, stats.predictedCycleLength));
   const fertileStartDate = isoDate(addDays(cycleStart, stats.fertileStartDay - 1));
   const fertileEndDate = isoDate(addDays(cycleStart, stats.fertileEndDay - 1));
 
   const ovText = stats.ovulationConfirmed
     ? `🥚 Ovulation: ~day ${stats.estimatedOvulationDay} (${ovDate}) — confirmed by temperature rise.`
     : `🥚 Predicted ovulation: day ${stats.estimatedOvulationDay} (${ovDate}).`;
+
+  const historyNote =
+    history.length >= 2
+      ? `📚 Based on ${history.length} past cycle${history.length === 1 ? "" : "s"} (avg ${stats.predictedCycleLength}d, ±${stats.cycleLengthStdDev}d)`
+      : `📚 Add more cycles to sharpen predictions — currently using your ${profile.avg_cycle_length}-day default.`;
 
   const caption = [
     `📊 *Status* — cycle started ${cycle.started_on}`,
@@ -468,12 +475,11 @@ async function sendStatus(profile: any, from: string) {
     ovText,
     `🩸 Next period predicted: ${nextPeriodDate}`,
     `📈 Logs this cycle: ${temps.length}`,
-    "",
-    DISCLAIMER,
+    historyNote,
   ].join("\n");
 
   const chartUrl = buildChartUrl({
-    avgCycleLength: profile.avg_cycle_length,
+    avgCycleLength: stats.predictedCycleLength,
     periodLength: profile.period_length,
     temps,
     stats,
