@@ -490,6 +490,8 @@ async function sendStatus(profile: any, from: string) {
     historyNote,
     "",
     `ℹ️ These predictions update with every new temperature you log — expect them to shift as your cycle unfolds.`,
+  ].join("\n");
+
 
   const chartUrl = buildChartUrl({
     avgCycleLength: stats.predictedCycleLength,
