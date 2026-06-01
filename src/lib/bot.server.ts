@@ -488,7 +488,8 @@ async function sendStatus(profile: any, from: string) {
     `🩸 Next period predicted: ${nextPeriodDate}`,
     `📈 Logs this cycle: ${temps.length}`,
     historyNote,
-  ].join("\n");
+    "",
+    `ℹ️ These predictions update with every new temperature you log — expect them to shift as your cycle unfolds.`,
 
   const chartUrl = buildChartUrl({
     avgCycleLength: stats.predictedCycleLength,
