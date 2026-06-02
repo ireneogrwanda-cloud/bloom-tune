@@ -414,6 +414,10 @@ export async function handleIncomingMessage(args: {
     profile = updated;
     const welcome = `👋 Welcome! I've set up a new account for you.
 
+ℹ️ This bot helps you track fertility patterns.
+
+🌐 *Language:* I'll reply in your local language by default. Type *lang english*, *lang french*, or *lang local* anytime to switch.
+
 🌡️ *How to use a BBT (basal body thermometer) properly:*
 • Use a dedicated BBT thermometer (0.01°C precision), not a regular fever one.
 • Take your temperature *first thing in the morning*, before getting out of bed, talking, drinking, or even sitting up.
@@ -423,6 +427,8 @@ export async function handleIncomingMessage(args: {
 • Then send the number here (e.g. *36.7*).
 
 📅 *When to start:* ideally from *day 1 of your period* (first day of bleeding). Daily logs make predictions much more accurate.
+
+🗓️ *Logging a past day?* Send the temp with a date or cycle day, e.g. *36.7 2026-06-01*, *36.7 01/06*, *36.7 yesterday*, or *36.7 d5*.
 
 Type *help* anytime to see commands.`;
     await sendWhatsAppText(from, await translate(welcome, detectLanguage(from)));
