@@ -462,7 +462,8 @@ Type *help* anytime to see commands.`;
   // Language preference
   const langPick = parseLanguageCommand(trimmed, from);
   if (langPick) {
-    const nextState = { ...(profile.bot_state || {}), language: langPick };
+    const prev = (profile.bot_state && typeof profile.bot_state === "object" && !Array.isArray(profile.bot_state)) ? profile.bot_state as Record<string, unknown> : {};
+    const nextState = { ...prev, language: langPick };
     await supabaseAdmin.from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
     profile = { ...profile, bot_state: nextState };
     await reply(profile, from, `🌐 Language set to ${langPick}. I'll reply in ${langPick} from now on. Type *lang local* to switch back to your local language.`);
