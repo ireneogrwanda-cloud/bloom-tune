@@ -683,7 +683,7 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
       : `🥚 Predicted ovulation: day ${stats.estimatedOvulationDay} (${ovDate}) — estimate`,
     `🩸 Next period predicted: ${nextPeriodDate}`,
     "",
-    `ℹ️ Predictions can shift with each new temperature — the more days you log, the more accurate they get.`,
+    `ℹ️ This bot helps you track fertility patterns. Predictions can shift with each new temperature — the more days you log, the more accurate they get.`,
     aiText ? "" : "",
     aiText,
   ].filter((l) => l !== null).join("\n");
