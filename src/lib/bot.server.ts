@@ -578,15 +578,17 @@ async function sendStatus(profile: any, from: string) {
   await replyImage(profile, from, chartUrl, caption);
 }
 
-async function handleTempLog(profile: any, from: string, temp: number, day?: number) {
+async function handleTempLog(profile: any, from: string, temp: number, day?: number, dateIso?: string) {
   const today = isoDate(new Date());
   const cycle = await getOrCreateActiveCycle(profile.id, today);
   const cycleStart = new Date(cycle.started_on);
 
-  // Compute logged_for date: if day provided, anchor to cycle start, else today.
-  const loggedFor = day
-    ? isoDate(addDays(cycleStart, day - 1))
-    : today;
+  // Compute logged_for date: explicit date wins, then cycle day, then today.
+  const loggedFor = dateIso
+    ? dateIso
+    : day
+      ? isoDate(addDays(cycleStart, day - 1))
+      : today;
 
   // Upsert log for that date
   const { error: upErr } = await supabaseAdmin
