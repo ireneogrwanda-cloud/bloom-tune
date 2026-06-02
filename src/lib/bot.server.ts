@@ -435,7 +435,7 @@ Type *help* anytime to see commands.`;
   // Commands
   if (lower === "help" || lower === "/help") {
     await reply(
-      profile.id,
+      profile,
       from,
       [
         "📋 Commands:",
