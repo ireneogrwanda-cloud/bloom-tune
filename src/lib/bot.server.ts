@@ -565,7 +565,7 @@ async function sendStatus(profile: any, from: string) {
     `📈 Logs this cycle: ${temps.length}`,
     historyNote,
     "",
-    `ℹ️ These predictions update with every new temperature you log — expect them to shift as your cycle unfolds.`,
+    `ℹ️ This bot helps you track fertility patterns. Predictions update with every new temperature you log — expect them to shift as your cycle unfolds.`,
   ].join("\n");
 
 
