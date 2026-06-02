@@ -446,13 +446,26 @@ Type *help* anytime to see commands.`;
       [
         "📋 Commands:",
         "• Send a number (e.g. *36.7*) to log today's basal temperature",
-        "• Add a day to log a past day, e.g. *36.7 d5* or *day 5 36.7*",
+        "• Add a date or day, e.g. *36.7 2026-06-01*, *36.7 01/06*, *36.7 yesterday*, or *36.7 d5*",
         "• *status* — current cycle day, fertile window, and chart",
         "• *chart* — send your cycle chart now",
         "• *reset cycle* — mark today as day 1 of a new cycle",
+        "• *lang english* / *lang french* / *lang local* — change reply language",
         "• *help* — show this menu",
+        "",
+        "ℹ️ This bot helps you track fertility patterns.",
       ].join("\n"),
     );
+    return;
+  }
+
+  // Language preference
+  const langPick = parseLanguageCommand(trimmed, from);
+  if (langPick) {
+    const nextState = { ...(profile.bot_state || {}), language: langPick };
+    await supabaseAdmin.from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
+    profile = { ...profile, bot_state: nextState };
+    await reply(profile, from, `🌐 Language set to ${langPick}. I'll reply in ${langPick} from now on. Type *lang local* to switch back to your local language.`);
     return;
   }
 
@@ -483,16 +496,16 @@ Type *help* anytime to see commands.`;
     return;
   }
 
-  // Try parsing a temperature (with optional day number)
+  // Try parsing a temperature (with optional day number or date)
   const parsed = parseTempAndDay(trimmed);
   if (parsed) {
-    await handleTempLog(profile, from, parsed.temp, parsed.day);
+    await handleTempLog(profile, from, parsed.temp, parsed.day, parsed.date);
     return;
   }
 
   // Fallback: friendly hint
   await reply(
-    profile.id,
+    profile,
     from,
     `I didn't catch a temperature in that. Send a number like *36.7* (or *36.7 d5* to log a past day), or *help* for commands.`,
   );
