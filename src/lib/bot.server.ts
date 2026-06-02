@@ -464,7 +464,7 @@ Type *help* anytime to see commands.`;
       .select("*")
       .single();
     await reply(
-      profile.id,
+      profile,
       from,
       `🩸 New cycle started on ${today}. I'll predict your fertile window based on your ${profile.avg_cycle_length}-day average. Send your daily BBT to refine it.`,
     );
