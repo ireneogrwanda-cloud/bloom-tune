@@ -72,6 +72,27 @@ function detectLanguage(phone: string): string {
   return "English";
 }
 
+// Resolve a user's preferred language: explicit override in bot_state wins,
+// otherwise fall back to phone-based detection.
+function userLang(profile: any, phone: string): string {
+  const override = profile?.bot_state?.language;
+  if (typeof override === "string" && override.trim()) return override;
+  return detectLanguage(phone);
+}
+
+// Parse a free-text language command. Returns the canonical language name or null.
+function parseLanguageCommand(text: string, phone: string): string | null {
+  const t = text.trim().toLowerCase();
+  const m = t.match(/^(?:lang|language|ururimi|langue)\s+(.+)$/);
+  if (!m) return null;
+  const v = m[1].trim();
+  if (/^(en|eng|english|icyongereza|anglais)$/.test(v)) return "English";
+  if (/^(fr|fre|fra|french|igifaransa|francais|français)$/.test(v)) return "French";
+  if (/^(local|native|home|mine|my\s+language)$/.test(v)) return detectLanguage(phone);
+  // Title-case anything else and accept it (e.g. "Spanish", "Kinyarwanda")
+  return v.charAt(0).toUpperCase() + v.slice(1).toLowerCase();
+}
+
 const LANG_STYLE: Record<string, string> = {
   Kinyarwanda: `STYLE GUIDE for Kinyarwanda — produce natural, grammatically perfect Kinyarwanda. Follow these conventions EXACTLY:
 
