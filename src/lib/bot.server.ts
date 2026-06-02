@@ -210,14 +210,49 @@ async function replyImage(profile: any, to: string, imageUrl: string, caption?: 
   if (cap) await logOutbound(profile?.id ?? null, `[chart] ${cap}`);
 }
 
-// Parse optional day-number prefix/suffix alongside a temperature.
-// Accepts "36.7", "36.7 d5", "d5 36.7", "day 12 36.7", "36.7 day 12".
-function parseTempAndDay(text: string): { temp: number; day?: number } | null {
+// Parse an optional date alongside a temperature. Accepts:
+//   "36.7"                          → today
+//   "36.7 d5" / "day 5 36.7"        → cycle day 5
+//   "36.7 2026-06-01"               → that ISO date
+//   "36.7 01/06" / "36.7 01/06/2026"→ DD/MM[/YYYY]
+//   "36.7 yesterday" / "36.7 today" → relative day
+function parseTempAndDay(text: string): { temp: number; day?: number; date?: string } | null {
   const temp = parseTemperature(text);
   if (temp === null) return null;
-  const m = text.match(/\b(?:d|day|cycle\s*day)\s*(\d{1,2})\b/i);
-  const day = m ? Math.max(1, Math.min(60, parseInt(m[1], 10))) : undefined;
-  return { temp, day };
+  const t = text.trim();
+
+  // Cycle-day form
+  const dayMatch = t.match(/\b(?:d|day|cycle\s*day)\s*(\d{1,2})\b/i);
+  if (dayMatch) {
+    const day = Math.max(1, Math.min(60, parseInt(dayMatch[1], 10)));
+    return { temp, day };
+  }
+
+  // Relative day
+  if (/\b(today|now)\b/i.test(t)) return { temp, date: isoDate(new Date()) };
+  if (/\b(yesterday)\b/i.test(t)) return { temp, date: isoDate(addDays(new Date(), -1)) };
+
+  // ISO date YYYY-MM-DD
+  const iso = t.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/);
+  if (iso) {
+    const d = new Date(`${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`);
+    if (!isNaN(d.getTime())) return { temp, date: isoDate(d) };
+  }
+
+  // DD/MM or DD/MM/YYYY (also accepts DD-MM-YYYY / DD.MM.YYYY)
+  const dmy = t.match(/\b(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2,4}))?\b/);
+  if (dmy) {
+    const dd = parseInt(dmy[1], 10);
+    const mm = parseInt(dmy[2], 10);
+    let yyyy = dmy[3] ? parseInt(dmy[3], 10) : new Date().getFullYear();
+    if (yyyy < 100) yyyy += 2000;
+    if (dd >= 1 && dd <= 31 && mm >= 1 && mm <= 12) {
+      const d = new Date(`${yyyy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`);
+      if (!isNaN(d.getTime())) return { temp, date: isoDate(d) };
+    }
+  }
+
+  return { temp };
 }
 
 // Build a public chart image URL using QuickChart (Chart.js renderer).
