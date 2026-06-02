@@ -52,9 +52,12 @@ function stddev(xs: number[]): number {
 }
 
 // 3-over-6 BBT rule. Returns ovulation cycle-day (day before first elevated temp).
-export function detectOvulation(points: TempPoint[]): number | null {
-  if (points.length < 9) return null;
-  const sorted = [...points].sort((a, b) => a.day - b.day);
+// Excludes points inside the menstrual phase — bleeding-day temps are noisy and
+// would otherwise lower the baseline artificially.
+export function detectOvulation(points: TempPoint[], periodLength = 0): number | null {
+  const eligible = points.filter((p) => p.day > periodLength);
+  if (eligible.length < 9) return null;
+  const sorted = [...eligible].sort((a, b) => a.day - b.day);
   for (let i = 6; i <= sorted.length - 3; i++) {
     const baseline = sorted.slice(i - 6, i);
     const rise = sorted.slice(i, i + 3);
