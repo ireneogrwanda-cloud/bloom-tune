@@ -111,9 +111,13 @@ export function predictCycle(args: {
   let status: CycleStats["status"] = "unknown";
   let message = "";
 
-  if (cycleDay <= periodLength && confidence !== "high") {
+  if (cycleDay <= periodLength && periodLength < fertileStartDay) {
+    // Menstrual phase, safely outside the fertile buffer → confirmed low fertility (green).
     status = "early-cycle";
-    message = `Day ${cycleDay} of your cycle. Fertility is typically low in the early days.`;
+    message = `Day ${cycleDay} of your period. This is a confirmed low-fertility day — pregnancy chance is very low while you're bleeding.`;
+  } else if (cycleDay <= periodLength) {
+    status = "early-cycle";
+    message = `Day ${cycleDay} of your period. Fertility is typically low, but your cycle history is too short for us to fully confirm — treat borderline days as potentially fertile.`;
   } else if (cycleDay < fertileStartDay) {
     status = "pre-fertile";
     message =
