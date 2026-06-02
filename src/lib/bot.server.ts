@@ -520,7 +520,7 @@ async function sendStatus(profile: any, from: string) {
     temps,
     stats,
   });
-  await replyImage(profile.id, from, chartUrl, caption);
+  await replyImage(profile, from, chartUrl, caption);
 }
 
 async function handleTempLog(profile: any, from: string, temp: number, day?: number) {
@@ -548,7 +548,7 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
     );
   if (upErr) {
     console.error("upsert temp error", upErr);
-    await reply(profile.id, from, "Sorry, I couldn't save that. Please try again.");
+    await reply(profile, from, "Sorry, I couldn't save that. Please try again.");
     return;
   }
 
@@ -637,7 +637,7 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
     temps,
     stats,
   });
-  await replyImage(profile.id, from, chartUrl, caption);
+  await replyImage(profile, from, chartUrl, caption);
 }
 
 async function generateAiCommentary(input: {
