@@ -52,9 +52,12 @@ function stddev(xs: number[]): number {
 }
 
 // 3-over-6 BBT rule. Returns ovulation cycle-day (day before first elevated temp).
-export function detectOvulation(points: TempPoint[]): number | null {
-  if (points.length < 9) return null;
-  const sorted = [...points].sort((a, b) => a.day - b.day);
+// Excludes points inside the menstrual phase — bleeding-day temps are noisy and
+// would otherwise lower the baseline artificially.
+export function detectOvulation(points: TempPoint[], periodLength = 0): number | null {
+  const eligible = points.filter((p) => p.day > periodLength);
+  if (eligible.length < 9) return null;
+  const sorted = [...eligible].sort((a, b) => a.day - b.day);
   for (let i = 6; i <= sorted.length - 3; i++) {
     const baseline = sorted.slice(i - 6, i);
     const rise = sorted.slice(i, i + 3);
@@ -85,7 +88,7 @@ export function predictCycle(args: {
 
   // ---- 2. Ovulation estimate -------------------------------------------------
   const calendarOv = predictedCycleLength - 14;
-  const detectedOv = detectOvulation(temps);
+  const detectedOv = detectOvulation(temps, periodLength);
   const ovulationDay = detectedOv ?? calendarOv;
 
   // ---- 3. Confidence ---------------------------------------------------------
@@ -108,9 +111,13 @@ export function predictCycle(args: {
   let status: CycleStats["status"] = "unknown";
   let message = "";
 
-  if (cycleDay <= periodLength && confidence !== "high") {
+  if (cycleDay <= periodLength && periodLength < fertileStartDay) {
+    // Menstrual phase, safely outside the fertile buffer → confirmed low fertility (green).
     status = "early-cycle";
-    message = `Day ${cycleDay} of your cycle. Fertility is typically low in the early days.`;
+    message = `Day ${cycleDay} of your period. This is a confirmed low-fertility day — pregnancy chance is very low while you're bleeding.`;
+  } else if (cycleDay <= periodLength) {
+    status = "early-cycle";
+    message = `Day ${cycleDay} of your period. Fertility is typically low, but your cycle history is too short for us to fully confirm — treat borderline days as potentially fertile.`;
   } else if (cycleDay < fertileStartDay) {
     status = "pre-fertile";
     message =

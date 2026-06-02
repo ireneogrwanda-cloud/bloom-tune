@@ -72,6 +72,27 @@ function detectLanguage(phone: string): string {
   return "English";
 }
 
+// Resolve a user's preferred language: explicit override in bot_state wins,
+// otherwise fall back to phone-based detection.
+function userLang(profile: any, phone: string): string {
+  const override = profile?.bot_state?.language;
+  if (typeof override === "string" && override.trim()) return override;
+  return detectLanguage(phone);
+}
+
+// Parse a free-text language command. Returns the canonical language name or null.
+function parseLanguageCommand(text: string, phone: string): string | null {
+  const t = text.trim().toLowerCase();
+  const m = t.match(/^(?:lang|language|ururimi|langue)\s+(.+)$/);
+  if (!m) return null;
+  const v = m[1].trim();
+  if (/^(en|eng|english|icyongereza|anglais)$/.test(v)) return "English";
+  if (/^(fr|fre|fra|french|igifaransa|francais|français)$/.test(v)) return "French";
+  if (/^(local|native|home|mine|my\s+language)$/.test(v)) return detectLanguage(phone);
+  // Title-case anything else and accept it (e.g. "Spanish", "Kinyarwanda")
+  return v.charAt(0).toUpperCase() + v.slice(1).toLowerCase();
+}
+
 const LANG_STYLE: Record<string, string> = {
   Kinyarwanda: `STYLE GUIDE for Kinyarwanda — produce natural, grammatically perfect Kinyarwanda. Follow these conventions EXACTLY:
 
@@ -177,26 +198,61 @@ async function logOutbound(userId: string | null, body: string) {
   });
 }
 
-async function reply(userId: string | null, to: string, body: string) {
-  const translated = await translate(body, detectLanguage(to));
+async function reply(profile: any, to: string, body: string) {
+  const translated = await translate(body, userLang(profile, to));
   await sendWhatsAppText(to, translated);
-  await logOutbound(userId, translated);
+  await logOutbound(profile?.id ?? null, translated);
 }
 
-async function replyImage(userId: string | null, to: string, imageUrl: string, caption?: string) {
-  const cap = caption ? await translate(caption, detectLanguage(to)) : undefined;
+async function replyImage(profile: any, to: string, imageUrl: string, caption?: string) {
+  const cap = caption ? await translate(caption, userLang(profile, to)) : undefined;
   await sendWhatsAppImage(to, imageUrl, cap);
-  if (cap) await logOutbound(userId, `[chart] ${cap}`);
+  if (cap) await logOutbound(profile?.id ?? null, `[chart] ${cap}`);
 }
 
-// Parse optional day-number prefix/suffix alongside a temperature.
-// Accepts "36.7", "36.7 d5", "d5 36.7", "day 12 36.7", "36.7 day 12".
-function parseTempAndDay(text: string): { temp: number; day?: number } | null {
+// Parse an optional date alongside a temperature. Accepts:
+//   "36.7"                          → today
+//   "36.7 d5" / "day 5 36.7"        → cycle day 5
+//   "36.7 2026-06-01"               → that ISO date
+//   "36.7 01/06" / "36.7 01/06/2026"→ DD/MM[/YYYY]
+//   "36.7 yesterday" / "36.7 today" → relative day
+function parseTempAndDay(text: string): { temp: number; day?: number; date?: string } | null {
   const temp = parseTemperature(text);
   if (temp === null) return null;
-  const m = text.match(/\b(?:d|day|cycle\s*day)\s*(\d{1,2})\b/i);
-  const day = m ? Math.max(1, Math.min(60, parseInt(m[1], 10))) : undefined;
-  return { temp, day };
+  const t = text.trim();
+
+  // Cycle-day form
+  const dayMatch = t.match(/\b(?:d|day|cycle\s*day)\s*(\d{1,2})\b/i);
+  if (dayMatch) {
+    const day = Math.max(1, Math.min(60, parseInt(dayMatch[1], 10)));
+    return { temp, day };
+  }
+
+  // Relative day
+  if (/\b(today|now)\b/i.test(t)) return { temp, date: isoDate(new Date()) };
+  if (/\b(yesterday)\b/i.test(t)) return { temp, date: isoDate(addDays(new Date(), -1)) };
+
+  // ISO date YYYY-MM-DD
+  const iso = t.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/);
+  if (iso) {
+    const d = new Date(`${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`);
+    if (!isNaN(d.getTime())) return { temp, date: isoDate(d) };
+  }
+
+  // DD/MM or DD/MM/YYYY (also accepts DD-MM-YYYY / DD.MM.YYYY)
+  const dmy = t.match(/\b(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2,4}))?\b/);
+  if (dmy) {
+    const dd = parseInt(dmy[1], 10);
+    const mm = parseInt(dmy[2], 10);
+    let yyyy = dmy[3] ? parseInt(dmy[3], 10) : new Date().getFullYear();
+    if (yyyy < 100) yyyy += 2000;
+    if (dd >= 1 && dd <= 31 && mm >= 1 && mm <= 12) {
+      const d = new Date(`${yyyy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`);
+      if (!isNaN(d.getTime())) return { temp, date: isoDate(d) };
+    }
+  }
+
+  return { temp };
 }
 
 // Build a public chart image URL using QuickChart (Chart.js renderer).
@@ -358,6 +414,10 @@ export async function handleIncomingMessage(args: {
     profile = updated;
     const welcome = `👋 Welcome! I've set up a new account for you.
 
+ℹ️ This bot helps you track fertility patterns.
+
+🌐 *Language:* I'll reply in your local language by default. Type *lang english*, *lang french*, or *lang local* anytime to switch.
+
 🌡️ *How to use a BBT (basal body thermometer) properly:*
 • Use a dedicated BBT thermometer (0.01°C precision), not a regular fever one.
 • Take your temperature *first thing in the morning*, before getting out of bed, talking, drinking, or even sitting up.
@@ -367,6 +427,8 @@ export async function handleIncomingMessage(args: {
 • Then send the number here (e.g. *36.7*).
 
 📅 *When to start:* ideally from *day 1 of your period* (first day of bleeding). Daily logs make predictions much more accurate.
+
+🗓️ *Logging a past day?* Send the temp with a date or cycle day, e.g. *36.7 2026-06-01*, *36.7 01/06*, *36.7 yesterday*, or *36.7 d5*.
 
 Type *help* anytime to see commands.`;
     await sendWhatsAppText(from, await translate(welcome, detectLanguage(from)));
@@ -379,18 +441,32 @@ Type *help* anytime to see commands.`;
   // Commands
   if (lower === "help" || lower === "/help") {
     await reply(
-      profile.id,
+      profile,
       from,
       [
         "📋 Commands:",
         "• Send a number (e.g. *36.7*) to log today's basal temperature",
-        "• Add a day to log a past day, e.g. *36.7 d5* or *day 5 36.7*",
+        "• Add a date or day, e.g. *36.7 2026-06-01*, *36.7 01/06*, *36.7 yesterday*, or *36.7 d5*",
         "• *status* — current cycle day, fertile window, and chart",
         "• *chart* — send your cycle chart now",
         "• *reset cycle* — mark today as day 1 of a new cycle",
+        "• *lang english* / *lang french* / *lang local* — change reply language",
         "• *help* — show this menu",
+        "",
+        "ℹ️ This bot helps you track fertility patterns.",
       ].join("\n"),
     );
+    return;
+  }
+
+  // Language preference
+  const langPick = parseLanguageCommand(trimmed, from);
+  if (langPick) {
+    const prev = (profile.bot_state && typeof profile.bot_state === "object" && !Array.isArray(profile.bot_state)) ? profile.bot_state as Record<string, unknown> : {};
+    const nextState = { ...prev, language: langPick };
+    await supabaseAdmin.from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
+    profile = { ...profile, bot_state: nextState };
+    await reply(profile, from, `🌐 Language set to ${langPick}. I'll reply in ${langPick} from now on. Type *lang local* to switch back to your local language.`);
     return;
   }
 
@@ -408,7 +484,7 @@ Type *help* anytime to see commands.`;
       .select("*")
       .single();
     await reply(
-      profile.id,
+      profile,
       from,
       `🩸 New cycle started on ${today}. I'll predict your fertile window based on your ${profile.avg_cycle_length}-day average. Send your daily BBT to refine it.`,
     );
@@ -421,16 +497,16 @@ Type *help* anytime to see commands.`;
     return;
   }
 
-  // Try parsing a temperature (with optional day number)
+  // Try parsing a temperature (with optional day number or date)
   const parsed = parseTempAndDay(trimmed);
   if (parsed) {
-    await handleTempLog(profile, from, parsed.temp, parsed.day);
+    await handleTempLog(profile, from, parsed.temp, parsed.day, parsed.date);
     return;
   }
 
   // Fallback: friendly hint
   await reply(
-    profile.id,
+    profile,
     from,
     `I didn't catch a temperature in that. Send a number like *36.7* (or *36.7 d5* to log a past day), or *help* for commands.`,
   );
@@ -489,7 +565,7 @@ async function sendStatus(profile: any, from: string) {
     `📈 Logs this cycle: ${temps.length}`,
     historyNote,
     "",
-    `ℹ️ These predictions update with every new temperature you log — expect them to shift as your cycle unfolds.`,
+    `ℹ️ This bot helps you track fertility patterns. Predictions update with every new temperature you log — expect them to shift as your cycle unfolds.`,
   ].join("\n");
 
 
@@ -499,18 +575,20 @@ async function sendStatus(profile: any, from: string) {
     temps,
     stats,
   });
-  await replyImage(profile.id, from, chartUrl, caption);
+  await replyImage(profile, from, chartUrl, caption);
 }
 
-async function handleTempLog(profile: any, from: string, temp: number, day?: number) {
+async function handleTempLog(profile: any, from: string, temp: number, day?: number, dateIso?: string) {
   const today = isoDate(new Date());
   const cycle = await getOrCreateActiveCycle(profile.id, today);
   const cycleStart = new Date(cycle.started_on);
 
-  // Compute logged_for date: if day provided, anchor to cycle start, else today.
-  const loggedFor = day
-    ? isoDate(addDays(cycleStart, day - 1))
-    : today;
+  // Compute logged_for date: explicit date wins, then cycle day, then today.
+  const loggedFor = dateIso
+    ? dateIso
+    : day
+      ? isoDate(addDays(cycleStart, day - 1))
+      : today;
 
   // Upsert log for that date
   const { error: upErr } = await supabaseAdmin
@@ -527,7 +605,7 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
     );
   if (upErr) {
     console.error("upsert temp error", upErr);
-    await reply(profile.id, from, "Sorry, I couldn't save that. Please try again.");
+    await reply(profile, from, "Sorry, I couldn't save that. Please try again.");
     return;
   }
 
@@ -605,7 +683,7 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
       : `🥚 Predicted ovulation: day ${stats.estimatedOvulationDay} (${ovDate}) — estimate`,
     `🩸 Next period predicted: ${nextPeriodDate}`,
     "",
-    `ℹ️ Predictions can shift with each new temperature — the more days you log, the more accurate they get.`,
+    `ℹ️ This bot helps you track fertility patterns. Predictions can shift with each new temperature — the more days you log, the more accurate they get.`,
     aiText ? "" : "",
     aiText,
   ].filter((l) => l !== null).join("\n");
@@ -616,7 +694,7 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
     temps,
     stats,
   });
-  await replyImage(profile.id, from, chartUrl, caption);
+  await replyImage(profile, from, chartUrl, caption);
 }
 
 async function generateAiCommentary(input: {
