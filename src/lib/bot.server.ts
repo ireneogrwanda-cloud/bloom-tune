@@ -198,16 +198,16 @@ async function logOutbound(userId: string | null, body: string) {
   });
 }
 
-async function reply(userId: string | null, to: string, body: string) {
-  const translated = await translate(body, detectLanguage(to));
+async function reply(profile: any, to: string, body: string) {
+  const translated = await translate(body, userLang(profile, to));
   await sendWhatsAppText(to, translated);
-  await logOutbound(userId, translated);
+  await logOutbound(profile?.id ?? null, translated);
 }
 
-async function replyImage(userId: string | null, to: string, imageUrl: string, caption?: string) {
-  const cap = caption ? await translate(caption, detectLanguage(to)) : undefined;
+async function replyImage(profile: any, to: string, imageUrl: string, caption?: string) {
+  const cap = caption ? await translate(caption, userLang(profile, to)) : undefined;
   await sendWhatsAppImage(to, imageUrl, cap);
-  if (cap) await logOutbound(userId, `[chart] ${cap}`);
+  if (cap) await logOutbound(profile?.id ?? null, `[chart] ${cap}`);
 }
 
 // Parse optional day-number prefix/suffix alongside a temperature.
