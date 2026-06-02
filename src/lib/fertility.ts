@@ -88,7 +88,7 @@ export function predictCycle(args: {
 
   // ---- 2. Ovulation estimate -------------------------------------------------
   const calendarOv = predictedCycleLength - 14;
-  const detectedOv = detectOvulation(temps);
+  const detectedOv = detectOvulation(temps, periodLength);
   const ovulationDay = detectedOv ?? calendarOv;
 
   // ---- 3. Confidence ---------------------------------------------------------
