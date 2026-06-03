@@ -648,9 +648,11 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
     }));
 
   const history = await getCycleHistory(profile.id);
+  // Contextualize the prediction to the *logged* date so the status message
+  // reflects the day the user is actually reporting, not today's calendar day.
   const stats = predictCycle({
     cycleStart,
-    today: new Date(),
+    today: new Date(loggedFor),
     avgCycleLength: profile.avg_cycle_length,
     periodLength: profile.period_length,
     temps,
