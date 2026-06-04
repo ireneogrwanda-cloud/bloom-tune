@@ -221,22 +221,22 @@ function parseTempAndDay(text: string): { temp: number; day?: number; date?: str
   if (temp === null) return null;
   const t = text.trim();
 
-  // Cycle-day form
+  // Cycle-day form. Keep parsing after this so a message can include both
+  // a cycle day and a date, e.g. "36.7 d14 2026-06-15".
   const dayMatch = t.match(/\b(?:d|day|cycle\s*day)\s*(\d{1,2})\b/i);
-  if (dayMatch) {
-    const day = Math.max(1, Math.min(60, parseInt(dayMatch[1], 10)));
-    return { temp, day };
-  }
+  const day = dayMatch ? Math.max(1, Math.min(60, parseInt(dayMatch[1], 10))) : undefined;
+
+  let date: string | undefined;
 
   // Relative day
-  if (/\b(today|now)\b/i.test(t)) return { temp, date: isoDate(new Date()) };
-  if (/\b(yesterday)\b/i.test(t)) return { temp, date: isoDate(addDays(new Date(), -1)) };
+  if (/\b(today|now)\b/i.test(t)) date = isoDate(new Date());
+  if (/\b(yesterday)\b/i.test(t)) date = isoDate(addDays(new Date(), -1));
 
   // ISO date YYYY-MM-DD
   const iso = t.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/);
   if (iso) {
     const d = new Date(`${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`);
-    if (!isNaN(d.getTime())) return { temp, date: isoDate(d) };
+    if (!isNaN(d.getTime())) date = isoDate(d);
   }
 
   // DD/MM or DD/MM/YYYY (also accepts DD-MM-YYYY / DD.MM.YYYY)
@@ -248,11 +248,15 @@ function parseTempAndDay(text: string): { temp: number; day?: number; date?: str
     if (yyyy < 100) yyyy += 2000;
     if (dd >= 1 && dd <= 31 && mm >= 1 && mm <= 12) {
       const d = new Date(`${yyyy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`);
-      if (!isNaN(d.getTime())) return { temp, date: isoDate(d) };
+      if (!isNaN(d.getTime())) date = isoDate(d);
     }
   }
 
-  return { temp };
+  if (dayMatch) {
+    return date ? { temp, day, date } : { temp, day };
+  }
+
+  return date ? { temp, date } : { temp };
 }
 
 // Build a public chart image URL using QuickChart (Chart.js renderer).
