@@ -416,6 +416,9 @@ export async function handleIncomingMessage(args: {
       return;
     }
     profile = updated;
+    const initialState = { awaiting_period_start: true };
+    await supabaseAdmin.from("profiles").update({ bot_state: initialState }).eq("id", profile.id);
+    profile.bot_state = initialState;
     const welcome = `👋 Welcome! I've set up a new account for you.
 
 ℹ️ This bot helps you track fertility patterns.
@@ -428,14 +431,14 @@ export async function handleIncomingMessage(args: {
 • Measure at roughly the *same time every day* (within ~30 min).
 • Aim for at least *4–5 hours of uninterrupted sleep* before measuring.
 • Measure the same way every day — orally (under the tongue), vaginally, or rectally — don't mix methods.
-• Then send the number here (e.g. *36.7*).
 
-📅 *When to start:* ideally from *day 1 of your period* (first day of bleeding). Daily logs make predictions much more accurate.
+📅 *First, let's anchor your cycle:* what date did your *last period start* (day 1 of bleeding)?
+Reply with a date — e.g. *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days ago*.
 
-🗓️ *Logging a past day?* Send the temp with a date or cycle day, e.g. *36.7 2026-06-01*, *36.7 01/06*, *36.7 yesterday*, or *36.7 d5*.
-
-Type *help* anytime to see commands.`;
+Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type *help* anytime.`;
     await sendWhatsAppText(from, await translate(welcome, detectLanguage(from)));
+    await logInbound(profile.id, from, waMessageId, trimmed, raw);
+    return;
   }
   await logInbound(profile.id, from, waMessageId, trimmed, raw);
 
