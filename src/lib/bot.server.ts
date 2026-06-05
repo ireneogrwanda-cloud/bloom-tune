@@ -499,6 +499,39 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
     return;
   }
 
+  // Onboarding: waiting for the user's last-period start date.
+  const botState = (profile.bot_state && typeof profile.bot_state === "object" && !Array.isArray(profile.bot_state)) ? profile.bot_state as Record<string, unknown> : {};
+  if (botState.awaiting_period_start) {
+    const parsedDate = parseDateOnly(trimmed);
+    if (!parsedDate) {
+      await reply(
+        profile,
+        from,
+        "📅 I still need to know when your *last period started* (day 1 of bleeding). Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days ago*.",
+      );
+      return;
+    }
+    // Close any active cycle, then open a new one starting on the given date.
+    await supabaseAdmin
+      .from("cycles")
+      .update({ status: "completed", ended_on: isoDate(new Date()) })
+      .eq("user_id", profile.id)
+      .eq("status", "active");
+    await supabaseAdmin
+      .from("cycles")
+      .insert({ user_id: profile.id, started_on: parsedDate, status: "active" });
+    const nextState = { ...botState, awaiting_period_start: false };
+    await supabaseAdmin.from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
+    profile = { ...profile, bot_state: nextState };
+    await reply(
+      profile,
+      from,
+      `✅ Got it — your cycle started *${parsedDate}*. From now on, send your morning basal temperature (e.g. *36.7*) and I'll track your fertile window.\n\n🗓️ Logging a past day? Add a date or cycle day, e.g. *36.7 2026-06-01*, *36.7 01/06*, *36.7 yesterday*, or *36.7 d5*.\n\nType *help* for more commands.`,
+    );
+    return;
+  }
+
+
   if (lower === "reset cycle" || lower === "new cycle" || lower === "period started") {
     const today = isoDate(new Date());
     // Close existing
