@@ -137,20 +137,49 @@ function Dashboard() {
             ) : (
               <ResponsiveContainer>
                 <LineChart data={temps} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                  <XAxis dataKey="day" label={{ value: "Cycle day", position: "insideBottom", offset: -2 }} />
-                  <YAxis domain={[35.5, 37.5]} tickCount={5} />
-                  <Tooltip formatter={(v: number) => `${v}°C`} />
+                  <defs>
+                    <linearGradient id="tempStroke" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="hsl(142 70% 40%)" />
+                      <stop offset="100%" stopColor="hsl(340 82% 55%)" />
+                    </linearGradient>
+                    <linearGradient id="fertileFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="hsl(340 82% 55%)" stopOpacity={0.28} />
+                      <stop offset="100%" stopColor="hsl(340 82% 55%)" stopOpacity={0.06} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 15% 80%)" opacity={0.35} />
+                  <XAxis dataKey="day" stroke="hsl(220 10% 45%)" tick={{ fontSize: 11 }} label={{ value: "Cycle day", position: "insideBottom", offset: -2, fill: "hsl(220 10% 45%)", fontSize: 11 }} />
+                  <YAxis domain={[35.5, 37.5]} tickCount={5} stroke="hsl(220 10% 45%)" tick={{ fontSize: 11 }} />
+                  <Tooltip
+                    formatter={(v: number, _n, item: any) => [`${v}°C`, item?.payload?.fertile ? "Fertile day" : "Low-fertility day"]}
+                    labelFormatter={(d) => `Cycle day ${d}`}
+                    contentStyle={{ borderRadius: 12, border: "1px solid hsl(220 15% 85%)", fontSize: 12 }}
+                  />
                   {stats && (
                     <ReferenceArea
                       x1={stats.fertileStartDay}
                       x2={stats.fertileEndDay}
-                      fill="hsl(340 80% 60%)"
-                      fillOpacity={0.1}
-                      label={{ value: "Fertile", position: "insideTop", fontSize: 11 }}
+                      fill="url(#fertileFill)"
+                      stroke="hsl(340 82% 55%)"
+                      strokeOpacity={0.25}
+                      label={{ value: "Fertile window", position: "insideTop", fontSize: 11, fill: "hsl(340 60% 40%)" }}
                     />
                   )}
-                  <Line type="monotone" dataKey="temp" stroke="hsl(340 80% 50%)" strokeWidth={2} dot />
+                  <Line
+                    type="monotone"
+                    dataKey="temp"
+                    stroke="url(#tempStroke)"
+                    strokeWidth={2.5}
+                    dot={(props: any) => {
+                      const { cx, cy, payload, index } = props;
+                      const fertile = payload?.fertile;
+                      const fill = fertile ? "hsl(340 82% 55%)" : "hsl(142 70% 42%)";
+                      return (
+                        <circle key={index} cx={cx} cy={cy} r={5} fill={fill} stroke="white" strokeWidth={2} />
+                      );
+                    }}
+                    activeDot={{ r: 7, strokeWidth: 2, stroke: "white" }}
+                  />
                 </LineChart>
               </ResponsiveContainer>
             )}
