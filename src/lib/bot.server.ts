@@ -259,6 +259,36 @@ function parseTempAndDay(text: string): { temp: number; day?: number; date?: str
   return date ? { temp, date } : { temp };
 }
 
+// Parse a date out of free-text (no temperature required). Accepts ISO,
+// DD/MM[/YYYY], "today", "yesterday", or "N days ago".
+function parseDateOnly(text: string): string | null {
+  const t = text.trim();
+  if (/^\s*today\s*$/i.test(t) || /\bnow\b/i.test(t)) return isoDate(new Date());
+  if (/^\s*yesterday\s*$/i.test(t) || /\byesterday\b/i.test(t)) return isoDate(addDays(new Date(), -1));
+  const ago = t.match(/\b(\d{1,2})\s*(?:days?|d)\s*ago\b/i);
+  if (ago) {
+    const n = parseInt(ago[1], 10);
+    if (n >= 0 && n <= 60) return isoDate(addDays(new Date(), -n));
+  }
+  const iso = t.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/);
+  if (iso) {
+    const d = new Date(`${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`);
+    if (!isNaN(d.getTime())) return isoDate(d);
+  }
+  const dmy = t.match(/\b(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2,4}))?\b/);
+  if (dmy) {
+    const dd = parseInt(dmy[1], 10);
+    const mm = parseInt(dmy[2], 10);
+    let yyyy = dmy[3] ? parseInt(dmy[3], 10) : new Date().getFullYear();
+    if (yyyy < 100) yyyy += 2000;
+    if (dd >= 1 && dd <= 31 && mm >= 1 && mm <= 12) {
+      const d = new Date(`${yyyy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`);
+      if (!isNaN(d.getTime())) return isoDate(d);
+    }
+  }
+  return null;
+}
+
 // Build a public chart image URL using QuickChart (Chart.js renderer).
 // Green = infertile days, Red = fertile window, dashed line = ovulation.
 function buildChartUrl(args: {
@@ -416,6 +446,9 @@ export async function handleIncomingMessage(args: {
       return;
     }
     profile = updated;
+    const initialState = { awaiting_period_start: true };
+    await supabaseAdmin.from("profiles").update({ bot_state: initialState }).eq("id", profile.id);
+    profile.bot_state = initialState;
     const welcome = `👋 Welcome! I've set up a new account for you.
 
 ℹ️ This bot helps you track fertility patterns.
@@ -428,14 +461,14 @@ export async function handleIncomingMessage(args: {
 • Measure at roughly the *same time every day* (within ~30 min).
 • Aim for at least *4–5 hours of uninterrupted sleep* before measuring.
 • Measure the same way every day — orally (under the tongue), vaginally, or rectally — don't mix methods.
-• Then send the number here (e.g. *36.7*).
 
-📅 *When to start:* ideally from *day 1 of your period* (first day of bleeding). Daily logs make predictions much more accurate.
+📅 *First, let's anchor your cycle:* what date did your *last period start* (day 1 of bleeding)?
+Reply with a date — e.g. *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days ago*.
 
-🗓️ *Logging a past day?* Send the temp with a date or cycle day, e.g. *36.7 2026-06-01*, *36.7 01/06*, *36.7 yesterday*, or *36.7 d5*.
-
-Type *help* anytime to see commands.`;
+Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type *help* anytime.`;
     await sendWhatsAppText(from, await translate(welcome, detectLanguage(from)));
+    await logInbound(profile.id, from, waMessageId, trimmed, raw);
+    return;
   }
   await logInbound(profile.id, from, waMessageId, trimmed, raw);
 
@@ -495,6 +528,39 @@ Type *help* anytime to see commands.`;
     await reply(profile, from, `🌐 Language set to ${langPick}. I'll reply in ${langPick} from now on. Type *lang local* to switch back to your local language.`);
     return;
   }
+
+  // Onboarding: waiting for the user's last-period start date.
+  const botState = (profile.bot_state && typeof profile.bot_state === "object" && !Array.isArray(profile.bot_state)) ? profile.bot_state as Record<string, unknown> : {};
+  if (botState.awaiting_period_start) {
+    const parsedDate = parseDateOnly(trimmed);
+    if (!parsedDate) {
+      await reply(
+        profile,
+        from,
+        "📅 I still need to know when your *last period started* (day 1 of bleeding). Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days ago*.",
+      );
+      return;
+    }
+    // Close any active cycle, then open a new one starting on the given date.
+    await supabaseAdmin
+      .from("cycles")
+      .update({ status: "completed", ended_on: isoDate(new Date()) })
+      .eq("user_id", profile.id)
+      .eq("status", "active");
+    await supabaseAdmin
+      .from("cycles")
+      .insert({ user_id: profile.id, started_on: parsedDate, status: "active" });
+    const nextState = { ...botState, awaiting_period_start: false };
+    await supabaseAdmin.from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
+    profile = { ...profile, bot_state: nextState };
+    await reply(
+      profile,
+      from,
+      `✅ Got it — your cycle started *${parsedDate}*. From now on, send your morning basal temperature (e.g. *36.7*) and I'll track your fertile window.\n\n🗓️ Logging a past day? Add a date or cycle day, e.g. *36.7 2026-06-01*, *36.7 01/06*, *36.7 yesterday*, or *36.7 d5*.\n\nType *help* for more commands.`,
+    );
+    return;
+  }
+
 
   if (lower === "reset cycle" || lower === "new cycle" || lower === "period started") {
     const today = isoDate(new Date());
