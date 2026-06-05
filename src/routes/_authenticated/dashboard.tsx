@@ -50,7 +50,7 @@ function Dashboard() {
   const activeCycle = data.activeCycle;
 
   const cycleStart = activeCycle ? new Date(activeCycle.started_on) : new Date();
-  const temps: TempPoint[] = data.activeLogs.map((l: any) => ({
+  const rawTemps: TempPoint[] = data.activeLogs.map((l: any) => ({
     day: Math.floor((new Date(l.logged_for).getTime() - cycleStart.getTime()) / 86400000) + 1,
     temp: Number(l.temp_celsius),
     date: l.logged_for,
@@ -62,9 +62,14 @@ function Dashboard() {
         today: new Date(),
         avgCycleLength: profile.avg_cycle_length,
         periodLength: profile.period_length,
-        temps,
+        temps: rawTemps,
       })
     : null;
+
+  const temps = rawTemps.map((p) => ({
+    ...p,
+    fertile: stats ? p.day >= stats.fertileStartDay && p.day <= stats.fertileEndDay : false,
+  }));
 
   async function onLog(e: React.FormEvent) {
     e.preventDefault();
