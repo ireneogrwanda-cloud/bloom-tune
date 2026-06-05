@@ -184,7 +184,15 @@ function Dashboard() {
               </ResponsiveContainer>
             )}
           </div>
+          {temps.length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "hsl(340 82% 55%)" }} /> Fertile day</span>
+              <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "hsl(142 70% 42%)" }} /> Low-fertility day</span>
+              <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm" style={{ background: "hsl(340 82% 55% / 0.2)", border: "1px solid hsl(340 82% 55% / 0.4)" }} /> Predicted fertile window</span>
+            </div>
+          )}
         </div>
+
 
         <div className="space-y-4">
           <form onSubmit={onLog} className="rounded-2xl border bg-card p-5 space-y-3">
