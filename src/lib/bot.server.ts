@@ -259,6 +259,36 @@ function parseTempAndDay(text: string): { temp: number; day?: number; date?: str
   return date ? { temp, date } : { temp };
 }
 
+// Parse a date out of free-text (no temperature required). Accepts ISO,
+// DD/MM[/YYYY], "today", "yesterday", or "N days ago".
+function parseDateOnly(text: string): string | null {
+  const t = text.trim();
+  if (/^\s*today\s*$/i.test(t) || /\bnow\b/i.test(t)) return isoDate(new Date());
+  if (/^\s*yesterday\s*$/i.test(t) || /\byesterday\b/i.test(t)) return isoDate(addDays(new Date(), -1));
+  const ago = t.match(/\b(\d{1,2})\s*(?:days?|d)\s*ago\b/i);
+  if (ago) {
+    const n = parseInt(ago[1], 10);
+    if (n >= 0 && n <= 60) return isoDate(addDays(new Date(), -n));
+  }
+  const iso = t.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/);
+  if (iso) {
+    const d = new Date(`${iso[1]}-${iso[2].padStart(2, "0")}-${iso[3].padStart(2, "0")}`);
+    if (!isNaN(d.getTime())) return isoDate(d);
+  }
+  const dmy = t.match(/\b(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2,4}))?\b/);
+  if (dmy) {
+    const dd = parseInt(dmy[1], 10);
+    const mm = parseInt(dmy[2], 10);
+    let yyyy = dmy[3] ? parseInt(dmy[3], 10) : new Date().getFullYear();
+    if (yyyy < 100) yyyy += 2000;
+    if (dd >= 1 && dd <= 31 && mm >= 1 && mm <= 12) {
+      const d = new Date(`${yyyy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`);
+      if (!isNaN(d.getTime())) return isoDate(d);
+    }
+  }
+  return null;
+}
+
 // Build a public chart image URL using QuickChart (Chart.js renderer).
 // Green = infertile days, Red = fertile window, dashed line = ovulation.
 function buildChartUrl(args: {
