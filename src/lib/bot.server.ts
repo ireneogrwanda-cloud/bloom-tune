@@ -8,6 +8,7 @@ import {
   predictCycle,
   isoDate,
   addDays,
+  daysBetween,
   type TempPoint,
   type CycleStats,
 } from "./fertility";
@@ -78,6 +79,40 @@ function userLang(profile: any, phone: string): string {
   const override = profile?.bot_state?.language;
   if (typeof override === "string" && override.trim()) return override;
   return detectLanguage(phone);
+}
+
+function readBotState(profile: any): Record<string, unknown> {
+  return profile?.bot_state && typeof profile.bot_state === "object" && !Array.isArray(profile.bot_state)
+    ? (profile.bot_state as Record<string, unknown>)
+    : {};
+}
+
+const COUNTRY_TIMEZONE: Array<[string, string]> = [
+  ["250", "Africa/Kigali"], ["254", "Africa/Nairobi"], ["255", "Africa/Dar_es_Salaam"], ["256", "Africa/Kampala"],
+  ["234", "Africa/Lagos"], ["233", "Africa/Accra"], ["27", "Africa/Johannesburg"], ["20", "Africa/Cairo"],
+  ["33", "Europe/Paris"], ["32", "Europe/Brussels"], ["44", "Europe/London"], ["49", "Europe/Berlin"],
+  ["39", "Europe/Rome"], ["34", "Europe/Madrid"], ["31", "Europe/Amsterdam"], ["1", "America/New_York"],
+  ["55", "America/Sao_Paulo"], ["52", "America/Mexico_City"], ["91", "Asia/Kolkata"], ["86", "Asia/Shanghai"],
+  ["81", "Asia/Tokyo"], ["82", "Asia/Seoul"], ["61", "Australia/Sydney"], ["971", "Asia/Dubai"],
+];
+
+function phoneTimezone(phone: string): string {
+  const n = normalizePhone(phone);
+  const sorted = [...COUNTRY_TIMEZONE].sort((a, b) => b[0].length - a[0].length);
+  return sorted.find(([code]) => n.startsWith(code))?.[1] ?? "UTC";
+}
+
+function localDateHour(date: Date, timeZone: string): { date: string; hour: number } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const part = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return { date: `${part("year")}-${part("month")}-${part("day")}`, hour: Number(part("hour")) };
 }
 
 // Parse a free-text language command. Returns the canonical language name or null.
@@ -304,6 +339,9 @@ function buildChartUrl(args: {
     const t = temps.find((p) => p.day === d);
     return t ? t.temp : null;
   });
+  const pointColors = labels.map((d) =>
+    d >= stats.fertileStartDay && d <= stats.fertileEndDay ? "rgb(220,38,38)" : "rgb(22,163,74)",
+  );
 
   const cfg = {
     type: "line",
@@ -318,7 +356,9 @@ function buildChartUrl(args: {
           spanGaps: true,
           tension: 0.3,
           pointRadius: 4,
-          pointBackgroundColor: "rgb(30,64,175)",
+          pointBackgroundColor: pointColors,
+          pointBorderColor: "white",
+          pointBorderWidth: 1.5,
         },
       ],
     },
@@ -453,6 +493,10 @@ export async function handleIncomingMessage(args: {
 
 ℹ️ This bot helps you track fertility patterns.
 
+⏰ I'll send a reminder at *6:00 a.m. your local time* so you can log your BBT before getting out of bed.
+
+🛡️ For contraception: use protection on 🔴 red days. No protection is needed on 🟢 green days.
+
 🌐 *Language:* I'll reply in your local language by default. Type *lang english*, *lang french*, or *lang local* anytime to switch.
 
 🌡️ *How to use a BBT (basal body thermometer) properly:*
@@ -490,6 +534,9 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
         "• *lang english* / *lang french* / *lang local* — change reply language",
         "• *help* — show this menu",
         "",
+        "⏰ I'll remind you at *6:00 a.m. your local time* to log your BBT.",
+        "🛡️ For contraception: use protection on 🔴 red days. No protection is needed on 🟢 green days.",
+        "",
         "🌡️ *How to use a BBT thermometer effectively*",
         "Basal Body Temperature is your body's lowest resting temperature. It's tiny — measured to hundredths of a degree (e.g. 36.22°C) — so accuracy depends on routine.",
         "",
@@ -521,7 +568,7 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
   // Language preference
   const langPick = parseLanguageCommand(trimmed, from);
   if (langPick) {
-    const prev = (profile.bot_state && typeof profile.bot_state === "object" && !Array.isArray(profile.bot_state)) ? profile.bot_state as Record<string, unknown> : {};
+    const prev = readBotState(profile);
     const nextState = { ...prev, language: langPick };
     await supabaseAdmin.from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
     profile = { ...profile, bot_state: nextState };
@@ -530,8 +577,29 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
   }
 
   // Onboarding: waiting for the user's last-period start date.
-  const botState = (profile.bot_state && typeof profile.bot_state === "object" && !Array.isArray(profile.bot_state)) ? profile.bot_state as Record<string, unknown> : {};
+  const botState = readBotState(profile);
   if (botState.awaiting_period_start) {
+    const pendingParsed = parseTempAndDay(trimmed);
+    if (pendingParsed) {
+      const nextState = {
+        ...botState,
+        awaiting_period_start: true,
+        pending_temp: pendingParsed.temp,
+        pending_day: pendingParsed.day,
+        pending_logged_for: pendingParsed.date ?? isoDate(new Date()),
+      };
+      await supabaseAdmin.from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
+      await reply(
+        profile,
+        from,
+        `✅ I received ${pendingParsed.temp.toFixed(2)}°C${pendingParsed.day ? ` for cycle day ${pendingParsed.day}` : ""}.
+
+📅 Before I save it, what date was the *first day of your period* (day 1 of bleeding)? This lets me correct your cycle days and chart.
+
+Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days ago*.`,
+      );
+      return;
+    }
     const parsedDate = parseDateOnly(trimmed);
     if (!parsedDate) {
       await reply(
@@ -541,18 +609,36 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
       );
       return;
     }
-    // Close any active cycle, then open a new one starting on the given date.
-    await supabaseAdmin
+    const { data: activeCycle } = await supabaseAdmin
       .from("cycles")
-      .update({ status: "completed", ended_on: isoDate(new Date()) })
+      .select("id")
       .eq("user_id", profile.id)
-      .eq("status", "active");
-    await supabaseAdmin
-      .from("cycles")
-      .insert({ user_id: profile.id, started_on: parsedDate, status: "active" });
-    const nextState = { ...botState, awaiting_period_start: false };
+      .eq("status", "active")
+      .order("started_on", { ascending: false })
+      .maybeSingle();
+    if (activeCycle) {
+      await supabaseAdmin.from("cycles").update({ started_on: parsedDate, ended_on: null, status: "active" }).eq("id", activeCycle.id);
+    } else {
+      await supabaseAdmin.from("cycles").insert({ user_id: profile.id, started_on: parsedDate, status: "active" });
+    }
+    const pendingTemp = typeof botState.pending_temp === "number" ? botState.pending_temp : null;
+    const pendingDay = typeof botState.pending_day === "number" ? botState.pending_day : null;
+    const pendingDate = typeof botState.pending_logged_for === "string" ? botState.pending_logged_for : null;
+    const nextState = {
+      ...botState,
+      awaiting_period_start: false,
+      pending_temp: undefined,
+      pending_day: undefined,
+      pending_logged_for: undefined,
+    };
     await supabaseAdmin.from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
     profile = { ...profile, bot_state: nextState };
+    if (pendingTemp !== null) {
+      await reply(profile, from, `✅ Got it — your cycle started *${parsedDate}*. I'll now save the temperature you sent using this corrected cycle day.`);
+      const correctedDate = pendingDay ? isoDate(addDays(new Date(parsedDate), pendingDay - 1)) : (pendingDate ?? isoDate(new Date()));
+      await handleTempLog(profile, from, pendingTemp, undefined, correctedDate);
+      return;
+    }
     await reply(
       profile,
       from,
@@ -652,6 +738,7 @@ async function sendStatus(profile: any, from: string) {
     "",
     `🔴 Fertile window: days ${stats.fertileStartDay}–${stats.fertileEndDay} (${fertileStartDate} → ${fertileEndDate})`,
     `🟢 Other days are low-fertility.`,
+    `🛡️ Use protection on 🔴 red days. No protection is needed on 🟢 green days.`,
     ovText,
     `🩸 Next period predicted: ${nextPeriodDate}`,
     `📈 Logs this cycle: ${temps.length}`,
@@ -680,6 +767,28 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
   const loggedFor = dateIso ?? today;
   let cycleStartIso = cycle.started_on;
   if (day) {
+    const currentCycleDay = daysBetween(new Date(cycle.started_on), new Date(loggedFor)) + 1;
+    if (currentCycleDay !== day) {
+      const botState = readBotState(profile);
+      const nextState = {
+        ...botState,
+        awaiting_period_start: true,
+        pending_temp: temp,
+        pending_day: day,
+        pending_logged_for: loggedFor,
+      };
+      await supabaseAdmin.from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
+      await reply(
+        { ...profile, bot_state: nextState },
+        from,
+        `✅ I received ${temp.toFixed(2)}°C for cycle day ${day}.
+
+📅 Your saved cycle start makes ${loggedFor} look like day ${currentCycleDay}, so before I update the chart: what date was the *first day of your period* (day 1 of bleeding)?
+
+Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days ago*.`,
+      );
+      return;
+    }
     cycleStartIso = isoDate(addDays(new Date(loggedFor), -(day - 1)));
     if (cycleStartIso !== cycle.started_on) {
       await supabaseAdmin.from("cycles").update({ started_on: cycleStartIso }).eq("id", cycle.id);
@@ -777,6 +886,7 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
     "",
     `${fertileNote}: days ${stats.fertileStartDay}–${stats.fertileEndDay}`,
     greenNote,
+    `🛡️ Use protection on 🔴 red days. No protection is needed on 🟢 green days.`,
     stats.ovulationConfirmed
       ? `🥚 Ovulation confirmed around day ${stats.estimatedOvulationDay} (${ovDate})`
       : `🥚 Predicted ovulation: day ${stats.estimatedOvulationDay} (${ovDate}) — estimate`,
@@ -794,6 +904,28 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
     stats,
   });
   await replyImage(profile, from, chartUrl, caption);
+}
+
+export async function sendDailyLogReminders(now = new Date()) {
+  const { data: profiles, error } = await supabaseAdmin
+    .from("profiles")
+    .select("id, whatsapp_number, bot_state")
+    .not("whatsapp_number", "is", null);
+  if (error) throw error;
+
+  for (const profile of profiles ?? []) {
+    if (!profile.whatsapp_number) continue;
+    const state = readBotState(profile);
+    const timeZone = typeof state.timezone === "string" ? state.timezone : phoneTimezone(profile.whatsapp_number);
+    const local = localDateHour(now, timeZone);
+    if (local.hour !== 6 || state.last_6am_reminder_on === local.date) continue;
+    const message = "⏰ Good morning — please log your BBT now, before getting out of bed. Send your temperature like *36.72*.";
+    await reply(profile, `+${profile.whatsapp_number}`, message);
+    await supabaseAdmin
+      .from("profiles")
+      .update({ bot_state: { ...state, timezone: timeZone, last_6am_reminder_on: local.date } })
+      .eq("id", profile.id);
+  }
 }
 
 async function generateAiCommentary(input: {
