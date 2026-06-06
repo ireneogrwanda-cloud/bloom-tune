@@ -8,6 +8,7 @@ import {
   predictCycle,
   isoDate,
   addDays,
+  daysBetween,
   type TempPoint,
   type CycleStats,
 } from "./fertility";
@@ -78,6 +79,42 @@ function userLang(profile: any, phone: string): string {
   const override = profile?.bot_state?.language;
   if (typeof override === "string" && override.trim()) return override;
   return detectLanguage(phone);
+}
+
+function readBotState(profile: any): Record<string, unknown> {
+  return profile?.bot_state && typeof profile.bot_state === "object" && !Array.isArray(profile.bot_state)
+    ? (profile.bot_state as Record<string, unknown>)
+    : {};
+}
+
+const COUNTRY_TIMEZONE: Array<[string, string]> = [
+  ["250", "Africa/Kigali"], ["254", "Africa/Nairobi"], ["255", "Africa/Dar_es_Salaam"], ["256", "Africa/Kampala"],
+  ["234", "Africa/Lagos"], ["233", "Africa/Accra"], ["27", "Africa/Johannesburg"], ["20", "Africa/Cairo"],
+  ["33", "Europe/Paris"], ["32", "Europe/Brussels"], ["44", "Europe/London"], ["49", "Europe/Berlin"],
+  ["39", "Europe/Rome"], ["34", "Europe/Madrid"], ["31", "Europe/Amsterdam"], ["1", "America/New_York"],
+  ["55", "America/Sao_Paulo"], ["52", "America/Mexico_City"], ["91", "Asia/Kolkata"], ["86", "Asia/Shanghai"],
+  ["81", "Asia/Tokyo"], ["82", "Asia/Seoul"], ["61", "Australia/Sydney"], ["971", "Asia/Dubai"],
+];
+
+function phoneTimezone(phone: string): string {
+  const stateTimezone = typeof phone === "string" ? undefined : undefined;
+  void stateTimezone;
+  const n = normalizePhone(phone);
+  const sorted = [...COUNTRY_TIMEZONE].sort((a, b) => b[0].length - a[0].length);
+  return sorted.find(([code]) => n.startsWith(code))?.[1] ?? "UTC";
+}
+
+function localDateHour(date: Date, timeZone: string): { date: string; hour: number } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const part = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return { date: `${part("year")}-${part("month")}-${part("day")}`, hour: Number(part("hour")) };
 }
 
 // Parse a free-text language command. Returns the canonical language name or null.
