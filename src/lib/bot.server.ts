@@ -605,7 +605,7 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
     profile = { ...profile, bot_state: nextState };
     if (pendingTemp !== null) {
       await reply(profile, from, `✅ Got it — your cycle started *${parsedDate}*. I'll now save the temperature you sent using this corrected cycle day.`);
-      await handleTempLog(profile, from, pendingTemp, undefined, pendingDate ?? today);
+      await handleTempLog(profile, from, pendingTemp, undefined, pendingDate ?? isoDate(new Date()));
       return;
     }
     await reply(
