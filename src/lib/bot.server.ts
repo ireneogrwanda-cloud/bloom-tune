@@ -495,6 +495,8 @@ export async function handleIncomingMessage(args: {
 
 ⏰ I'll send a reminder at *6:00 a.m. your local time* so you can log your BBT before getting out of bed.
 
+🛡️ For contraception: use protection on 🔴 red days. No protection is needed on 🟢 green days.
+
 🌐 *Language:* I'll reply in your local language by default. Type *lang english*, *lang french*, or *lang local* anytime to switch.
 
 🌡️ *How to use a BBT (basal body thermometer) properly:*
@@ -531,6 +533,9 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
         "• *reset cycle* — mark today as day 1 of a new cycle",
         "• *lang english* / *lang french* / *lang local* — change reply language",
         "• *help* — show this menu",
+        "",
+        "⏰ I'll remind you at *6:00 a.m. your local time* to log your BBT.",
+        "🛡️ For contraception: use protection on 🔴 red days. No protection is needed on 🟢 green days.",
         "",
         "🌡️ *How to use a BBT thermometer effectively*",
         "Basal Body Temperature is your body's lowest resting temperature. It's tiny — measured to hundredths of a degree (e.g. 36.22°C) — so accuracy depends on routine.",
@@ -574,6 +579,27 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
   // Onboarding: waiting for the user's last-period start date.
   const botState = readBotState(profile);
   if (botState.awaiting_period_start) {
+    const pendingParsed = parseTempAndDay(trimmed);
+    if (pendingParsed) {
+      const nextState = {
+        ...botState,
+        awaiting_period_start: true,
+        pending_temp: pendingParsed.temp,
+        pending_day: pendingParsed.day,
+        pending_logged_for: pendingParsed.date ?? isoDate(new Date()),
+      };
+      await supabaseAdmin.from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
+      await reply(
+        profile,
+        from,
+        `✅ I received ${pendingParsed.temp.toFixed(2)}°C${pendingParsed.day ? ` for cycle day ${pendingParsed.day}` : ""}.
+
+📅 Before I save it, what date was the *first day of your period* (day 1 of bleeding)? This lets me correct your cycle days and chart.
+
+Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days ago*.`,
+      );
+      return;
+    }
     const parsedDate = parseDateOnly(trimmed);
     if (!parsedDate) {
       await reply(
@@ -583,15 +609,18 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
       );
       return;
     }
-    // Close any active cycle, then open a new one starting on the given date.
-    await supabaseAdmin
+    const { data: activeCycle } = await supabaseAdmin
       .from("cycles")
-      .update({ status: "completed", ended_on: isoDate(new Date()) })
+      .select("id")
       .eq("user_id", profile.id)
-      .eq("status", "active");
-    await supabaseAdmin
-      .from("cycles")
-      .insert({ user_id: profile.id, started_on: parsedDate, status: "active" });
+      .eq("status", "active")
+      .order("started_on", { ascending: false })
+      .maybeSingle();
+    if (activeCycle) {
+      await supabaseAdmin.from("cycles").update({ started_on: parsedDate, ended_on: null, status: "active" }).eq("id", activeCycle.id);
+    } else {
+      await supabaseAdmin.from("cycles").insert({ user_id: profile.id, started_on: parsedDate, status: "active" });
+    }
     const pendingTemp = typeof botState.pending_temp === "number" ? botState.pending_temp : null;
     const pendingDate = typeof botState.pending_logged_for === "string" ? botState.pending_logged_for : null;
     const nextState = {
