@@ -493,6 +493,8 @@ export async function handleIncomingMessage(args: {
 
 ℹ️ This bot helps you track fertility patterns.
 
+⏰ I'll send a reminder at *6:00 a.m. your local time* so you can log your BBT before getting out of bed.
+
 🌐 *Language:* I'll reply in your local language by default. Type *lang english*, *lang french*, or *lang local* anytime to switch.
 
 🌡️ *How to use a BBT (basal body thermometer) properly:*
@@ -561,7 +563,7 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
   // Language preference
   const langPick = parseLanguageCommand(trimmed, from);
   if (langPick) {
-    const prev = (profile.bot_state && typeof profile.bot_state === "object" && !Array.isArray(profile.bot_state)) ? profile.bot_state as Record<string, unknown> : {};
+    const prev = readBotState(profile);
     const nextState = { ...prev, language: langPick };
     await supabaseAdmin.from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
     profile = { ...profile, bot_state: nextState };
@@ -570,7 +572,7 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
   }
 
   // Onboarding: waiting for the user's last-period start date.
-  const botState = (profile.bot_state && typeof profile.bot_state === "object" && !Array.isArray(profile.bot_state)) ? profile.bot_state as Record<string, unknown> : {};
+  const botState = readBotState(profile);
   if (botState.awaiting_period_start) {
     const parsedDate = parseDateOnly(trimmed);
     if (!parsedDate) {
@@ -590,9 +592,22 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
     await supabaseAdmin
       .from("cycles")
       .insert({ user_id: profile.id, started_on: parsedDate, status: "active" });
-    const nextState = { ...botState, awaiting_period_start: false };
+    const pendingTemp = typeof botState.pending_temp === "number" ? botState.pending_temp : null;
+    const pendingDate = typeof botState.pending_logged_for === "string" ? botState.pending_logged_for : null;
+    const nextState = {
+      ...botState,
+      awaiting_period_start: false,
+      pending_temp: undefined,
+      pending_day: undefined,
+      pending_logged_for: undefined,
+    };
     await supabaseAdmin.from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
     profile = { ...profile, bot_state: nextState };
+    if (pendingTemp !== null) {
+      await reply(profile, from, `✅ Got it — your cycle started *${parsedDate}*. I'll now save the temperature you sent using this corrected cycle day.`);
+      await handleTempLog(profile, from, pendingTemp, undefined, pendingDate ?? today);
+      return;
+    }
     await reply(
       profile,
       from,
