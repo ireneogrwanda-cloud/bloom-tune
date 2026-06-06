@@ -738,6 +738,7 @@ async function sendStatus(profile: any, from: string) {
     "",
     `🔴 Fertile window: days ${stats.fertileStartDay}–${stats.fertileEndDay} (${fertileStartDate} → ${fertileEndDate})`,
     `🟢 Other days are low-fertility.`,
+    `🛡️ Use protection on 🔴 red days. No protection is needed on 🟢 green days.`,
     ovText,
     `🩸 Next period predicted: ${nextPeriodDate}`,
     `📈 Logs this cycle: ${temps.length}`,
@@ -885,6 +886,7 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
     "",
     `${fertileNote}: days ${stats.fertileStartDay}–${stats.fertileEndDay}`,
     greenNote,
+    `🛡️ Use protection on 🔴 red days. No protection is needed on 🟢 green days.`,
     stats.ovulationConfirmed
       ? `🥚 Ovulation confirmed around day ${stats.estimatedOvulationDay} (${ovDate})`
       : `🥚 Predicted ovulation: day ${stats.estimatedOvulationDay} (${ovDate}) — estimate`,
@@ -902,6 +904,28 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
     stats,
   });
   await replyImage(profile, from, chartUrl, caption);
+}
+
+export async function sendDailyLogReminders(now = new Date()) {
+  const { data: profiles, error } = await supabaseAdmin
+    .from("profiles")
+    .select("id, whatsapp_number, bot_state")
+    .not("whatsapp_number", "is", null);
+  if (error) throw error;
+
+  for (const profile of profiles ?? []) {
+    if (!profile.whatsapp_number) continue;
+    const state = readBotState(profile);
+    const timeZone = typeof state.timezone === "string" ? state.timezone : phoneTimezone(profile.whatsapp_number);
+    const local = localDateHour(now, timeZone);
+    if (local.hour !== 6 || state.last_6am_reminder_on === local.date) continue;
+    const message = "⏰ Good morning — please log your BBT now, before getting out of bed. Send your temperature like *36.72*.";
+    await reply(profile, `+${profile.whatsapp_number}`, message);
+    await supabaseAdmin
+      .from("profiles")
+      .update({ bot_state: { ...state, timezone: timeZone, last_6am_reminder_on: local.date } })
+      .eq("id", profile.id);
+  }
 }
 
 async function generateAiCommentary(input: {
