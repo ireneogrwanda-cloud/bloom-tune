@@ -97,8 +97,6 @@ const COUNTRY_TIMEZONE: Array<[string, string]> = [
 ];
 
 function phoneTimezone(phone: string): string {
-  const stateTimezone = typeof phone === "string" ? undefined : undefined;
-  void stateTimezone;
   const n = normalizePhone(phone);
   const sorted = [...COUNTRY_TIMEZONE].sort((a, b) => b[0].length - a[0].length);
   return sorted.find(([code]) => n.startsWith(code))?.[1] ?? "UTC";
