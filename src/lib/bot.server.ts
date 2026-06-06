@@ -339,6 +339,9 @@ function buildChartUrl(args: {
     const t = temps.find((p) => p.day === d);
     return t ? t.temp : null;
   });
+  const pointColors = labels.map((d) =>
+    d >= stats.fertileStartDay && d <= stats.fertileEndDay ? "rgb(220,38,38)" : "rgb(22,163,74)",
+  );
 
   const cfg = {
     type: "line",
@@ -353,7 +356,9 @@ function buildChartUrl(args: {
           spanGaps: true,
           tension: 0.3,
           pointRadius: 4,
-          pointBackgroundColor: "rgb(30,64,175)",
+          pointBackgroundColor: pointColors,
+          pointBorderColor: "white",
+          pointBorderWidth: 1.5,
         },
       ],
     },
