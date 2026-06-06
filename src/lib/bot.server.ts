@@ -622,6 +622,7 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
       await supabaseAdmin.from("cycles").insert({ user_id: profile.id, started_on: parsedDate, status: "active" });
     }
     const pendingTemp = typeof botState.pending_temp === "number" ? botState.pending_temp : null;
+    const pendingDay = typeof botState.pending_day === "number" ? botState.pending_day : null;
     const pendingDate = typeof botState.pending_logged_for === "string" ? botState.pending_logged_for : null;
     const nextState = {
       ...botState,
@@ -634,7 +635,8 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
     profile = { ...profile, bot_state: nextState };
     if (pendingTemp !== null) {
       await reply(profile, from, `✅ Got it — your cycle started *${parsedDate}*. I'll now save the temperature you sent using this corrected cycle day.`);
-      await handleTempLog(profile, from, pendingTemp, undefined, pendingDate ?? isoDate(new Date()));
+      const correctedDate = pendingDay ? isoDate(addDays(new Date(parsedDate), pendingDay - 1)) : (pendingDate ?? isoDate(new Date()));
+      await handleTempLog(profile, from, pendingTemp, undefined, correctedDate);
       return;
     }
     await reply(
