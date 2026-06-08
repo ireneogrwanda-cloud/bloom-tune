@@ -738,7 +738,9 @@ async function sendStatus(profile: any, from: string) {
     "",
     `🔴 Fertile window: days ${stats.fertileStartDay}–${stats.fertileEndDay} (${fertileStartDate} → ${fertileEndDate})`,
     `🟢 Other days are low-fertility.`,
-    `🛡️ Use protection on 🔴 red days. No protection is needed on 🟢 green days.`,
+    (stats.cycleDay >= stats.fertileStartDay && stats.cycleDay <= stats.fertileEndDay)
+      ? `🛡️ Use protection today.`
+      : `🟢 No protection needed today.`,
     ovText,
     `🩸 Next period predicted: ${nextPeriodDate}`,
     `📈 Logs this cycle: ${temps.length}`,
@@ -886,7 +888,9 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
     "",
     `${fertileNote}: days ${stats.fertileStartDay}–${stats.fertileEndDay}`,
     greenNote,
-    `🛡️ Use protection on 🔴 red days. No protection is needed on 🟢 green days.`,
+    (stats.cycleDay >= stats.fertileStartDay && stats.cycleDay <= stats.fertileEndDay)
+      ? `🛡️ Use protection today.`
+      : `🟢 No protection needed today.`,
     stats.ovulationConfirmed
       ? `🥚 Ovulation confirmed around day ${stats.estimatedOvulationDay} (${ovDate})`
       : `🥚 Predicted ovulation: day ${stats.estimatedOvulationDay} (${ovDate}) — estimate`,
