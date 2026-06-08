@@ -985,7 +985,7 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
 export async function sendDailyLogReminders(now = new Date()) {
   const { data: profiles, error } = await supabaseAdmin
     .from("profiles")
-    .select("id, whatsapp_number, bot_state")
+    .select("*")
     .not("whatsapp_number", "is", null);
   if (error) throw error;
 
@@ -995,7 +995,32 @@ export async function sendDailyLogReminders(now = new Date()) {
     const timeZone = typeof state.timezone === "string" ? state.timezone : phoneTimezone(profile.whatsapp_number);
     const local = localDateHour(now, timeZone);
     if (local.hour !== 6 || state.last_6am_reminder_on === local.date) continue;
-    const message = "⏰ Good morning — please log your BBT now, before getting out of bed. Send your temperature like *36.72*.";
+
+    // If user is past their average cycle length, ask the bleeding question
+    // instead of the usual log reminder.
+    let message = "⏰ Good morning — please log your BBT now, before getting out of bed. Send your temperature like *36.72*.";
+    const { data: cycle } = await supabaseAdmin
+      .from("cycles")
+      .select("started_on")
+      .eq("user_id", profile.id)
+      .eq("status", "active")
+      .order("started_on", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (cycle) {
+      const computedDay = daysBetween(new Date(cycle.started_on), new Date(`${local.date}T00:00:00`)) + 1;
+      const threshold = profile.avg_cycle_length || 28;
+      if (computedDay > threshold && state.last_bleeding_check_on !== local.date) {
+        message = `⏰ Good morning — you're on day ${computedDay}, past your usual ${threshold}-day cycle. *Are you bleeding today?* Reply *YES* (new cycle starts as day 1) or *NO* (I'll keep counting). Then send your BBT.`;
+        await supabaseAdmin
+          .from("profiles")
+          .update({ bot_state: { ...state, timezone: timeZone, awaiting_bleeding_check: true, pending_logged_for: local.date, last_6am_reminder_on: local.date } })
+          .eq("id", profile.id);
+        await reply(profile, `+${profile.whatsapp_number}`, message);
+        continue;
+      }
+    }
+
     await reply(profile, `+${profile.whatsapp_number}`, message);
     await supabaseAdmin
       .from("profiles")
@@ -1003,6 +1028,7 @@ export async function sendDailyLogReminders(now = new Date()) {
       .eq("id", profile.id);
   }
 }
+
 
 async function generateAiCommentary(input: {
   temp: number;
