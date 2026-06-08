@@ -647,6 +647,51 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
     return;
   }
 
+  // Awaiting answer to "are you bleeding today?" (cycle overdue)
+  if (botState.awaiting_bleeding_check) {
+    const yes = /^\s*(yes|y|yep|yeah|yup|oui|ego|ndabihora|ndabivuga|sí|si)\b/i.test(trimmed);
+    const no = /^\s*(no|n|nope|nah|non|oya)\b/i.test(trimmed);
+    if (!yes && !no) {
+      await reply(profile, from, "🩸 Quick check first — are you bleeding today? Reply *YES* or *NO*.");
+      return;
+    }
+    const pendingTemp = typeof botState.pending_temp === "number" ? botState.pending_temp : null;
+    const pendingDate = typeof botState.pending_logged_for === "string" ? botState.pending_logged_for : isoDate(new Date());
+    const clearedState = {
+      ...botState,
+      awaiting_bleeding_check: false,
+      pending_temp: undefined,
+      pending_logged_for: undefined,
+      last_bleeding_check_on: pendingDate,
+    };
+    await supabaseAdmin.from("profiles").update({ bot_state: clearedState }).eq("id", profile.id);
+    profile = { ...profile, bot_state: clearedState };
+
+    if (yes) {
+      // Close active cycle, open a new one starting on the pending log date.
+      await supabaseAdmin
+        .from("cycles")
+        .update({ status: "completed", ended_on: pendingDate })
+        .eq("user_id", profile.id)
+        .eq("status", "active");
+      await supabaseAdmin
+        .from("cycles")
+        .insert({ user_id: profile.id, started_on: pendingDate, status: "active" });
+      await reply(profile, from, `🩸 Got it — new cycle starts today (${pendingDate}). That's *day 1*. I'll recalibrate your fertile window from here.`);
+      if (pendingTemp !== null) {
+        await handleTempLog(profile, from, pendingTemp, undefined, pendingDate);
+      }
+      return;
+    }
+    // NO — keep counting beyond the average. Just log the temp at the natural day.
+    await reply(profile, from, `👍 Thanks — I'll keep counting past your usual cycle length until bleeding starts.`);
+    if (pendingTemp !== null) {
+      await handleTempLog(profile, from, pendingTemp, undefined, pendingDate);
+    }
+    return;
+  }
+
+
 
   if (lower === "reset cycle" || lower === "new cycle" || lower === "period started") {
     const today = isoDate(new Date());
