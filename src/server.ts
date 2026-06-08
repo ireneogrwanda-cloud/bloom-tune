@@ -2,7 +2,7 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
-import { sendDailyLogReminders } from "./lib/bot.server";
+
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -78,9 +78,5 @@ export default {
       return brandedErrorResponse();
     }
   },
-  async scheduled(_controller: unknown, _env: unknown, ctx: { waitUntil?: (promise: Promise<unknown>) => void }) {
-    const work = sendDailyLogReminders();
-    ctx.waitUntil?.(work);
-    await work;
-  },
 };
+
