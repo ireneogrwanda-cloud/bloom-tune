@@ -78,9 +78,5 @@ export default {
       return brandedErrorResponse();
     }
   },
-  async scheduled(_controller: unknown, _env: unknown, ctx: { waitUntil?: (promise: Promise<unknown>) => void }) {
-    const work = sendDailyLogReminders();
-    ctx.waitUntil?.(work);
-    await work;
-  },
 };
+
