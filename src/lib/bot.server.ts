@@ -647,6 +647,51 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
     return;
   }
 
+  // Awaiting answer to "are you bleeding today?" (cycle overdue)
+  if (botState.awaiting_bleeding_check) {
+    const yes = /^\s*(yes|y|yep|yeah|yup|oui|ego|ndabihora|ndabivuga|sí|si)\b/i.test(trimmed);
+    const no = /^\s*(no|n|nope|nah|non|oya)\b/i.test(trimmed);
+    if (!yes && !no) {
+      await reply(profile, from, "🩸 Quick check first — are you bleeding today? Reply *YES* or *NO*.");
+      return;
+    }
+    const pendingTemp = typeof botState.pending_temp === "number" ? botState.pending_temp : null;
+    const pendingDate = typeof botState.pending_logged_for === "string" ? botState.pending_logged_for : isoDate(new Date());
+    const clearedState = {
+      ...botState,
+      awaiting_bleeding_check: false,
+      pending_temp: undefined,
+      pending_logged_for: undefined,
+      last_bleeding_check_on: pendingDate,
+    };
+    await supabaseAdmin.from("profiles").update({ bot_state: clearedState }).eq("id", profile.id);
+    profile = { ...profile, bot_state: clearedState };
+
+    if (yes) {
+      // Close active cycle, open a new one starting on the pending log date.
+      await supabaseAdmin
+        .from("cycles")
+        .update({ status: "completed", ended_on: pendingDate })
+        .eq("user_id", profile.id)
+        .eq("status", "active");
+      await supabaseAdmin
+        .from("cycles")
+        .insert({ user_id: profile.id, started_on: pendingDate, status: "active" });
+      await reply(profile, from, `🩸 Got it — new cycle starts today (${pendingDate}). That's *day 1*. I'll recalibrate your fertile window from here.`);
+      if (pendingTemp !== null) {
+        await handleTempLog(profile, from, pendingTemp, undefined, pendingDate);
+      }
+      return;
+    }
+    // NO — keep counting beyond the average. Just log the temp at the natural day.
+    await reply(profile, from, `👍 Thanks — I'll keep counting past your usual cycle length until bleeding starts.`);
+    if (pendingTemp !== null) {
+      await handleTempLog(profile, from, pendingTemp, undefined, pendingDate);
+    }
+    return;
+  }
+
+
 
   if (lower === "reset cycle" || lower === "new cycle" || lower === "period started") {
     const today = isoDate(new Date());
@@ -796,6 +841,33 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
       await supabaseAdmin.from("cycles").update({ started_on: cycleStartIso }).eq("id", cycle.id);
     }
   }
+
+  // If the user is past their average cycle length and we haven't already
+  // asked today, pause and check whether bleeding has started.
+  const computedDay = daysBetween(new Date(cycleStartIso), new Date(loggedFor)) + 1;
+  const threshold = profile.avg_cycle_length || 28;
+  const botStateNow = readBotState(profile);
+  if (
+    !day &&
+    computedDay > threshold &&
+    botStateNow.last_bleeding_check_on !== loggedFor &&
+    !botStateNow.awaiting_period_start
+  ) {
+    const nextState = {
+      ...botStateNow,
+      awaiting_bleeding_check: true,
+      pending_temp: temp,
+      pending_logged_for: loggedFor,
+    };
+    await supabaseAdmin.from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
+    await reply(
+      { ...profile, bot_state: nextState },
+      from,
+      `📅 You're on day ${computedDay} — past your usual ${threshold}-day cycle. *Are you bleeding today?* Reply *YES* (I'll start a new cycle as day 1) or *NO* (I'll keep counting).`,
+    );
+    return;
+  }
+
   const cycleStart = new Date(cycleStartIso);
 
   // Upsert log for that date
@@ -913,7 +985,7 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
 export async function sendDailyLogReminders(now = new Date()) {
   const { data: profiles, error } = await supabaseAdmin
     .from("profiles")
-    .select("id, whatsapp_number, bot_state")
+    .select("*")
     .not("whatsapp_number", "is", null);
   if (error) throw error;
 
@@ -923,7 +995,32 @@ export async function sendDailyLogReminders(now = new Date()) {
     const timeZone = typeof state.timezone === "string" ? state.timezone : phoneTimezone(profile.whatsapp_number);
     const local = localDateHour(now, timeZone);
     if (local.hour !== 6 || state.last_6am_reminder_on === local.date) continue;
-    const message = "⏰ Good morning — please log your BBT now, before getting out of bed. Send your temperature like *36.72*.";
+
+    // If user is past their average cycle length, ask the bleeding question
+    // instead of the usual log reminder.
+    let message = "⏰ Good morning — please log your BBT now, before getting out of bed. Send your temperature like *36.72*.";
+    const { data: cycle } = await supabaseAdmin
+      .from("cycles")
+      .select("started_on")
+      .eq("user_id", profile.id)
+      .eq("status", "active")
+      .order("started_on", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (cycle) {
+      const computedDay = daysBetween(new Date(cycle.started_on), new Date(`${local.date}T00:00:00`)) + 1;
+      const threshold = profile.avg_cycle_length || 28;
+      if (computedDay > threshold && state.last_bleeding_check_on !== local.date) {
+        message = `⏰ Good morning — you're on day ${computedDay}, past your usual ${threshold}-day cycle. *Are you bleeding today?* Reply *YES* (new cycle starts as day 1) or *NO* (I'll keep counting). Then send your BBT.`;
+        await supabaseAdmin
+          .from("profiles")
+          .update({ bot_state: { ...state, timezone: timeZone, awaiting_bleeding_check: true, pending_logged_for: local.date, last_6am_reminder_on: local.date } })
+          .eq("id", profile.id);
+        await reply(profile, `+${profile.whatsapp_number}`, message);
+        continue;
+      }
+    }
+
     await reply(profile, `+${profile.whatsapp_number}`, message);
     await supabaseAdmin
       .from("profiles")
@@ -931,6 +1028,7 @@ export async function sendDailyLogReminders(now = new Date()) {
       .eq("id", profile.id);
   }
 }
+
 
 async function generateAiCommentary(input: {
   temp: number;
