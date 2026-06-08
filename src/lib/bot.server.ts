@@ -841,6 +841,33 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
       await supabaseAdmin.from("cycles").update({ started_on: cycleStartIso }).eq("id", cycle.id);
     }
   }
+
+  // If the user is past their average cycle length and we haven't already
+  // asked today, pause and check whether bleeding has started.
+  const computedDay = daysBetween(new Date(cycleStartIso), new Date(loggedFor)) + 1;
+  const threshold = profile.avg_cycle_length || 28;
+  const botStateNow = readBotState(profile);
+  if (
+    !day &&
+    computedDay > threshold &&
+    botStateNow.last_bleeding_check_on !== loggedFor &&
+    !botStateNow.awaiting_period_start
+  ) {
+    const nextState = {
+      ...botStateNow,
+      awaiting_bleeding_check: true,
+      pending_temp: temp,
+      pending_logged_for: loggedFor,
+    };
+    await supabaseAdmin.from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
+    await reply(
+      { ...profile, bot_state: nextState },
+      from,
+      `📅 You're on day ${computedDay} — past your usual ${threshold}-day cycle. *Are you bleeding today?* Reply *YES* (I'll start a new cycle as day 1) or *NO* (I'll keep counting).`,
+    );
+    return;
+  }
+
   const cycleStart = new Date(cycleStartIso);
 
   // Upsert log for that date
