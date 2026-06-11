@@ -20,6 +20,7 @@ export type CycleStats = {
   fertileEndDay: number;
   status: "early-cycle" | "pre-fertile" | "fertile" | "ovulation" | "post-ovulation" | "unknown";
   ovulationConfirmed: boolean;
+  fertileWindowClosed: boolean;
   confidence: "low" | "medium" | "high";
   predictedCycleLength: number;
   cycleLengthStdDev: number;
