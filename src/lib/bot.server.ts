@@ -783,9 +783,9 @@ async function sendStatus(profile: any, from: string) {
     "",
     `🔴 Fertile window: days ${stats.fertileStartDay}–${stats.fertileEndDay} (${fertileStartDate} → ${fertileEndDate})`,
     `🟢 Other days are low-fertility.`,
-    (stats.cycleDay >= stats.fertileStartDay && stats.cycleDay <= stats.fertileEndDay)
-      ? `🛡️ Use protection today.`
-      : `🟢 No protection needed today.`,
+    stats.fertileWindowClosed
+      ? `🟢 No protection needed today — fertile window confirmed closed by 3+ days of elevated temperature.`
+      : `🛡️ Use protection today.`,
     ovText,
     `🩸 Next period predicted: ${nextPeriodDate}`,
     `📈 Logs this cycle: ${temps.length}`,
