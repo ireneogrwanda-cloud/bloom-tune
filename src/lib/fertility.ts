@@ -20,6 +20,7 @@ export type CycleStats = {
   fertileEndDay: number;
   status: "early-cycle" | "pre-fertile" | "fertile" | "ovulation" | "post-ovulation" | "unknown";
   ovulationConfirmed: boolean;
+  fertileWindowClosed: boolean;
   confidence: "low" | "medium" | "high";
   predictedCycleLength: number;
   cycleLengthStdDev: number;
@@ -87,9 +88,32 @@ export function predictCycle(args: {
   const sd = validHistory.length >= 3 ? stddev(validHistory) : 2.5; // assume ±2.5d when unknown
 
   // ---- 2. Ovulation estimate -------------------------------------------------
+  // BBT 3-over-6 rule = strong evidence. Calendar estimate = weak prior that
+  // gets overridden when logged temps contradict it (e.g. still at baseline
+  // around the calendar ovulation day).
   const calendarOv = predictedCycleLength - 14;
   const detectedOv = detectOvulation(temps, periodLength);
-  const ovulationDay = detectedOv ?? calendarOv;
+
+  // If BBT hasn't confirmed ovulation but we have temps past the calendar
+  // ovulation day that are still at baseline, ovulation likely hasn't happened
+  // yet — push the estimate forward so the fertile window stays open.
+  let calendarOvAdjusted = calendarOv;
+  if (detectedOv === null && temps.length >= 3) {
+    const sorted = [...temps].sort((a, b) => a.day - b.day);
+    const lastDay = sorted[sorted.length - 1].day;
+    const baselinePool = sorted.filter((p) => p.day > periodLength && p.day < calendarOv);
+    if (baselinePool.length >= 3 && lastDay >= calendarOv) {
+      const baselineMax = Math.max(...baselinePool.map((p) => p.temp));
+      const recent = sorted.slice(-3);
+      const sustainedRise = recent.every((p) => p.temp >= baselineMax + 0.2);
+      if (!sustainedRise) {
+        // No confirmed rise yet — fertile window still open through latest log.
+        calendarOvAdjusted = Math.max(calendarOv, lastDay + 1);
+      }
+    }
+  }
+
+  const ovulationDay = detectedOv ?? calendarOvAdjusted;
 
   // ---- 3. Confidence ---------------------------------------------------------
   let confidence: CycleStats["confidence"];
@@ -98,21 +122,22 @@ export function predictCycle(args: {
   else confidence = "low";
 
   // ---- 4. Fertile window with variability buffer -----------------------------
-  // NC-style: sperm survive ~5d before ovulation, egg viable ~1d after.
-  // Add ceil(sd) extra days on each side to absorb cycle-length variability.
-  // When confidence is low, force a wider buffer so unsure days stay RED.
   const buffer =
     confidence === "high" ? 0 : confidence === "medium" ? Math.max(1, Math.ceil(sd)) : Math.max(3, Math.ceil(sd) + 2);
 
   const fertileStartDay = Math.max(1, ovulationDay - 5 - buffer);
   const fertileEndDay = ovulationDay + 1 + buffer;
 
+  // Fertile window is "closed" (safe to say no protection needed) ONLY when
+  // BBT has confirmed ovulation via the 3-over-6 rule AND we are clearly past
+  // the post-ovulation buffer. A single high reading is NOT enough.
+  const fertileWindowClosed = detectedOv !== null && cycleDay > fertileEndDay;
+
   // ---- 5. Status + human-readable message -----------------------------------
   let status: CycleStats["status"] = "unknown";
   let message = "";
 
   if (cycleDay <= periodLength && periodLength < fertileStartDay) {
-    // Menstrual phase, safely outside the fertile buffer → confirmed low fertility (green).
     status = "early-cycle";
     message = `Day ${cycleDay} of your period. This is a confirmed low-fertility day — pregnancy chance is very low while you're bleeding.`;
   } else if (cycleDay <= periodLength) {
@@ -135,10 +160,9 @@ export function predictCycle(args: {
     message = `Day ${cycleDay}. Still potentially fertile. Window closes after day ${fertileEndDay}.`;
   } else if (cycleDay <= predictedCycleLength) {
     status = "post-ovulation";
-    message =
-      confidence === "high"
-        ? `Day ${cycleDay}. Luteal phase confirmed by temperature rise — fertility is low. Next period expected around day ${predictedCycleLength + 1}.`
-        : `Day ${cycleDay}. Likely post-ovulation. Next period expected around day ${predictedCycleLength + 1}.`;
+    message = fertileWindowClosed
+      ? `Day ${cycleDay}. Luteal phase confirmed — temperature has stayed elevated for 3+ days. Fertility is low. Next period expected around day ${predictedCycleLength + 1}.`
+      : `Day ${cycleDay}. Likely post-ovulation, but not yet confirmed — fertility awareness methods need 3 consecutive elevated temperatures above the prior baseline before declaring the fertile window closed. Stay cautious.`;
   } else {
     status = "post-ovulation";
     message = `Day ${cycleDay}. Cycle is running longer than the ${predictedCycleLength}-day average; period may start any day.`;
@@ -151,6 +175,7 @@ export function predictCycle(args: {
     fertileEndDay,
     status,
     ovulationConfirmed: detectedOv !== null,
+    fertileWindowClosed,
     confidence,
     predictedCycleLength,
     cycleLengthStdDev: Math.round(sd * 10) / 10,
