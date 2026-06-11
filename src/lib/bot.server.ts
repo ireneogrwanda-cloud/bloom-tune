@@ -960,9 +960,9 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
     "",
     `${fertileNote}: days ${stats.fertileStartDay}–${stats.fertileEndDay}`,
     greenNote,
-    (stats.cycleDay >= stats.fertileStartDay && stats.cycleDay <= stats.fertileEndDay)
-      ? `🛡️ Use protection today.`
-      : `🟢 No protection needed today.`,
+    stats.fertileWindowClosed
+      ? `🟢 No protection needed today — fertile window confirmed closed by 3+ days of elevated temperature.`
+      : `🛡️ Use protection today.`,
     stats.ovulationConfirmed
       ? `🥚 Ovulation confirmed around day ${stats.estimatedOvulationDay} (${ovDate})`
       : `🥚 Predicted ovulation: day ${stats.estimatedOvulationDay} (${ovDate}) — estimate`,
