@@ -229,8 +229,8 @@ function Dashboard() {
           </div>
           {temps.length > 0 && (
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#dc2626" }} /> Fertile day</span>
-              <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#16a34a" }} /> Low-fertility day</span>
+              <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#dc2626" }} /> Fertile / treat as fertile</span>
+              <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#16a34a" }} /> Confidently infertile</span>
               <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm" style={{ background: "hsl(340 82% 55% / 0.2)", border: "1px solid hsl(340 82% 55% / 0.4)" }} /> Predicted fertile window</span>
             </div>
           )}
