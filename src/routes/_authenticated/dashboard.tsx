@@ -215,8 +215,8 @@ function Dashboard() {
                     strokeWidth={2.5}
                     dot={(props: any) => {
                       const { cx, cy, payload, index } = props;
-                      const fertile = payload?.fertile;
-                      const fill = fertile ? "#dc2626" : "#16a34a";
+                      const kind = payload?.kind;
+                      const fill = kind === "safe" ? "#16a34a" : "#dc2626";
                       return (
                         <circle key={index} cx={cx} cy={cy} r={5} fill={fill} stroke="white" strokeWidth={2} />
                       );
