@@ -16,6 +16,8 @@ export type TempPoint = { day: number; temp: number; date: string };
 export type CycleStats = {
   cycleDay: number;
   estimatedOvulationDay: number;
+  ovulationDayMin: number;
+  ovulationDayMax: number;
   fertileStartDay: number;
   fertileEndDay: number;
   status: "early-cycle" | "pre-fertile" | "fertile" | "ovulation" | "post-ovulation" | "unknown";
