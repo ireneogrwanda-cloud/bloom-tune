@@ -54,26 +54,30 @@ function stddev(xs: number[]): number {
   return Math.sqrt(v);
 }
 
-// 3-over-6 BBT rule. Returns ovulation cycle-day (day before first elevated temp).
-// Excludes points inside the menstrual phase — bleeding-day temps are noisy and
-// would otherwise lower the baseline artificially.
+// 3-over-6 BBT rule with coverline + minimum-rise threshold.
+//
+// Coverline = max(baseline). We require each of the next 3 readings to sit
+// strictly above the coverline AND at least one of them to clear it by
+// MIN_RISE_C, so a noise-level drift (e.g. +0.01°C) cannot falsely confirm
+// ovulation. Matches standard FAM teaching (Sensiplan / Justisse use a
+// ~0.2°C clearing rule on the 3rd elevated day).
+//
+// Excludes points inside the menstrual phase — bleeding-day temps are noisy
+// and would otherwise lower the baseline artificially.
+export const MIN_RISE_C = 0.2;
+
 export function detectOvulation(points: TempPoint[], periodLength = 0): number | null {
   const eligible = points.filter((p) => p.day > periodLength);
-  // Need at least 3 baseline points + 3 elevated points = 6 total.
   if (eligible.length < 6) return null;
   const sorted = [...eligible].sort((a, b) => a.day - b.day);
-  // Try each possible rise-start index. Baseline = up to 6 most-recent prior
-  // eligible points (min 3). This tolerates gaps in logging — the classical
-  // 3-over-6 rule uses the 6 most recent LOW temps, not 6 consecutive days.
   for (let i = 3; i <= sorted.length - 3; i++) {
     const baseline = sorted.slice(Math.max(0, i - 6), i);
     if (baseline.length < 3) continue;
     const rise = sorted.slice(i, i + 3);
-    const baselineMax = Math.max(...baseline.map((p) => p.temp));
-    // Classical 3-over-6: each of the 3 rise temps must be strictly above the
-    // baseline max. We don't require a fixed +0.2°C buffer — user-reported FAM
-    // practice only needs 3 consecutive readings above the prior baseline.
-    if (rise.every((p) => p.temp > baselineMax)) {
+    const coverline = Math.max(...baseline.map((p) => p.temp));
+    const allAbove = rise.every((p) => p.temp > coverline);
+    const clearsMinRise = rise.some((p) => p.temp >= coverline + MIN_RISE_C);
+    if (allAbove && clearsMinRise) {
       return sorted[i].day - 1;
     }
   }
@@ -115,7 +119,9 @@ export function predictCycle(args: {
     if (baselinePool.length >= 3 && lastDay >= calendarOv) {
       const baselineMax = Math.max(...baselinePool.map((p) => p.temp));
       const recent = sorted.slice(-3);
-      const sustainedRise = recent.every((p) => p.temp > baselineMax);
+      const sustainedRise =
+        recent.every((p) => p.temp > baselineMax) &&
+        recent.some((p) => p.temp >= baselineMax + MIN_RISE_C);
       if (!sustainedRise) {
         // No confirmed rise yet — fertile window still open through latest log.
         calendarOvAdjusted = Math.max(calendarOv, lastDay + 1);
