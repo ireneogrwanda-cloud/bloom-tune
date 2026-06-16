@@ -66,10 +66,22 @@ function Dashboard() {
       })
     : null;
 
-  const temps = rawTemps.map((p) => ({
-    ...p,
-    fertile: stats ? p.day >= stats.fertileStartDay && p.day <= stats.fertileEndDay : false,
-  }));
+  // Day classification for chart coloring:
+  //  - "fertile": inside predicted/confirmed fertile window → red
+  //  - "safe": confidently infertile (bleeding, or pre/post window with enough evidence) → green
+  //  - "uncertain": low-confidence pre-window or unclosed post-window → red (treat as fertile)
+  const preFertileConfirmed = stats ? stats.confidence !== "low" : false;
+  const postFertileConfirmed = stats ? stats.fertileWindowClosed : false;
+  const temps = rawTemps.map((p) => {
+    let kind: "fertile" | "safe" | "uncertain" = "safe";
+    if (stats) {
+      if (p.day >= stats.fertileStartDay && p.day <= stats.fertileEndDay) kind = "fertile";
+      else if (p.day <= profile.period_length) kind = "safe";
+      else if (p.day < stats.fertileStartDay) kind = preFertileConfirmed ? "safe" : "uncertain";
+      else kind = postFertileConfirmed ? "safe" : "uncertain";
+    }
+    return { ...p, fertile: kind === "fertile", kind };
+  });
 
   async function onLog(e: React.FormEvent) {
     e.preventDefault();
