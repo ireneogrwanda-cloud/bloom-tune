@@ -119,9 +119,15 @@ function Dashboard() {
             sub={stats.message}
           />
           <StatCard
-            label="Fertile window"
-            value={`Days ${stats.fertileStartDay}–${stats.fertileEndDay}`}
-            sub={stats.ovulationConfirmed ? "Confirmed by BBT" : "Calendar estimate"}
+            label="Ovulation"
+            value={
+              stats.ovulationConfirmed
+                ? `Day ${stats.estimatedOvulationDay}`
+                : stats.ovulationDayMin === stats.ovulationDayMax
+                  ? `~Day ${stats.estimatedOvulationDay}`
+                  : `Days ${stats.ovulationDayMin}–${stats.ovulationDayMax}`
+            }
+            sub={stats.ovulationConfirmed ? "Confirmed by BBT (3-over-6)" : `Estimated range · fertile window days ${stats.fertileStartDay}–${stats.fertileEndDay}`}
           />
         </div>
       )}
