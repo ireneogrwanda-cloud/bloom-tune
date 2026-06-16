@@ -119,7 +119,9 @@ export function predictCycle(args: {
     if (baselinePool.length >= 3 && lastDay >= calendarOv) {
       const baselineMax = Math.max(...baselinePool.map((p) => p.temp));
       const recent = sorted.slice(-3);
-      const sustainedRise = recent.every((p) => p.temp > baselineMax);
+      const sustainedRise =
+        recent.every((p) => p.temp > baselineMax) &&
+        recent.some((p) => p.temp >= baselineMax + MIN_RISE_C);
       if (!sustainedRise) {
         // No confirmed rise yet — fertile window still open through latest log.
         calendarOvAdjusted = Math.max(calendarOv, lastDay + 1);
