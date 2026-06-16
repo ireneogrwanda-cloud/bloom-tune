@@ -59,10 +59,15 @@ function stddev(xs: number[]): number {
 // would otherwise lower the baseline artificially.
 export function detectOvulation(points: TempPoint[], periodLength = 0): number | null {
   const eligible = points.filter((p) => p.day > periodLength);
-  if (eligible.length < 9) return null;
+  // Need at least 3 baseline points + 3 elevated points = 6 total.
+  if (eligible.length < 6) return null;
   const sorted = [...eligible].sort((a, b) => a.day - b.day);
-  for (let i = 6; i <= sorted.length - 3; i++) {
-    const baseline = sorted.slice(i - 6, i);
+  // Try each possible rise-start index. Baseline = up to 6 most-recent prior
+  // eligible points (min 3). This tolerates gaps in logging — the classical
+  // 3-over-6 rule uses the 6 most recent LOW temps, not 6 consecutive days.
+  for (let i = 3; i <= sorted.length - 3; i++) {
+    const baseline = sorted.slice(Math.max(0, i - 6), i);
+    if (baseline.length < 3) continue;
     const rise = sorted.slice(i, i + 3);
     const baselineMax = Math.max(...baseline.map((p) => p.temp));
     if (rise.every((p) => p.temp >= baselineMax + 0.2)) {
