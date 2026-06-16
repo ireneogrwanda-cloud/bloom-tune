@@ -390,13 +390,13 @@ function buildChartUrl(args: {
               type: "box",
               xMin: periodLength + 0.5,
               xMax: stats.fertileStartDay - 0.5,
-              backgroundColor: preFertileConfirmed ? "rgba(34,197,94,0.22)" : "rgba(245,158,11,0.20)",
+              backgroundColor: preFertileConfirmed ? "rgba(34,197,94,0.22)" : "rgba(239,68,68,0.22)",
               borderWidth: 0,
               label: {
                 display: true,
-                content: preFertileConfirmed ? "Infertile" : "Uncertain",
+                content: preFertileConfirmed ? "Infertile" : "Treat as fertile",
                 position: "center",
-                color: preFertileConfirmed ? "#166534" : "#92400e",
+                color: preFertileConfirmed ? "#166534" : "#991b1b",
               },
             },
             fertile: {
