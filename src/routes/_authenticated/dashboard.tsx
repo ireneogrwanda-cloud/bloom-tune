@@ -70,7 +70,7 @@ function Dashboard() {
   //  - "fertile": inside predicted/confirmed fertile window → red
   //  - "safe": confidently infertile (bleeding, or pre/post window with enough evidence) → green
   //  - "uncertain": low-confidence pre-window or unclosed post-window → red (treat as fertile)
-  const preFertileConfirmed = stats ? stats.confidence !== "low" : false;
+  const preFertileConfirmed = stats ? stats.cyclesAnalyzed >= 3 : false;
   const postFertileConfirmed = stats ? stats.fertileWindowClosed : false;
   const temps = rawTemps.map((p) => {
     let kind: "fertile" | "safe" | "uncertain" = "safe";
