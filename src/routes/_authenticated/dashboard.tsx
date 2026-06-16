@@ -179,16 +179,46 @@ function Dashboard() {
                   />
                   {stats && (
                     <ReferenceArea
+                      x1={profile.period_length + 1}
+                      x2={stats.fertileStartDay}
+                      fill={preFertileConfirmed ? "hsl(142 70% 42% / 0.12)" : "hsl(0 75% 55% / 0.16)"}
+                      stroke={preFertileConfirmed ? "hsl(142 70% 35%)" : "hsl(0 75% 50%)"}
+                      strokeOpacity={0.25}
+                      label={{
+                        value: preFertileConfirmed ? "Infertile" : "Treat as fertile",
+                        position: "insideTopLeft",
+                        fontSize: 10,
+                        fill: preFertileConfirmed ? "hsl(142 60% 30%)" : "hsl(0 65% 35%)",
+                      }}
+                    />
+                  )}
+                  {stats && (
+                    <ReferenceArea
+                      x1={stats.fertileEndDay}
+                      x2={Math.max(profile.avg_cycle_length, stats.cycleDay)}
+                      fill={postFertileConfirmed ? "hsl(142 70% 42% / 0.12)" : "hsl(0 75% 55% / 0.16)"}
+                      stroke={postFertileConfirmed ? "hsl(142 70% 35%)" : "hsl(0 75% 50%)"}
+                      strokeOpacity={0.25}
+                      label={{
+                        value: postFertileConfirmed ? "Infertile" : "Treat as fertile",
+                        position: "insideTopRight",
+                        fontSize: 10,
+                        fill: postFertileConfirmed ? "hsl(142 60% 30%)" : "hsl(0 65% 35%)",
+                      }}
+                    />
+                  )}
+                  {stats && (
+                    <ReferenceArea
                       x1={stats.fertileStartDay}
                       x2={stats.fertileEndDay}
-                      fill={stats.ovulationConfirmed ? "hsl(142 70% 42% / 0.12)" : "url(#fertileFill)"}
-                      stroke={stats.ovulationConfirmed ? "hsl(142 70% 35%)" : "hsl(340 82% 55%)"}
+                      fill={stats.ovulationConfirmed ? "hsl(0 75% 55% / 0.28)" : "url(#fertileFill)"}
+                      stroke={stats.ovulationConfirmed ? "hsl(0 75% 45%)" : "hsl(340 82% 55%)"}
                       strokeOpacity={0.3}
                       label={{
                         value: stats.ovulationConfirmed ? "Fertile window (confirmed)" : "Predicted fertile window",
                         position: "insideTop",
                         fontSize: 11,
-                        fill: stats.ovulationConfirmed ? "hsl(142 60% 30%)" : "hsl(340 60% 40%)",
+                        fill: stats.ovulationConfirmed ? "hsl(0 65% 35%)" : "hsl(340 60% 40%)",
                       }}
                     />
                   )}
