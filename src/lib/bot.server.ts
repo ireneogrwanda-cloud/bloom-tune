@@ -411,13 +411,13 @@ function buildChartUrl(args: {
               type: "box",
               xMin: stats.fertileEndDay + 0.5,
               xMax: totalDays + 0.5,
-              backgroundColor: postFertileConfirmed ? "rgba(34,197,94,0.22)" : "rgba(245,158,11,0.20)",
+              backgroundColor: postFertileConfirmed ? "rgba(34,197,94,0.22)" : "rgba(239,68,68,0.22)",
               borderWidth: 0,
               label: {
                 display: true,
-                content: postFertileConfirmed ? "Infertile" : "Uncertain",
+                content: postFertileConfirmed ? "Infertile" : "Treat as fertile",
                 position: "center",
-                color: postFertileConfirmed ? "#166534" : "#92400e",
+                color: postFertileConfirmed ? "#166534" : "#991b1b",
               },
             },
             ovulation: {
