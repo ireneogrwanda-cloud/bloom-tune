@@ -389,9 +389,14 @@ function buildChartUrl(args: {
               type: "box",
               xMin: periodLength + 0.5,
               xMax: stats.fertileStartDay - 0.5,
-              backgroundColor: "rgba(34,197,94,0.22)",
+              backgroundColor: preFertileConfirmed ? "rgba(34,197,94,0.22)" : "rgba(245,158,11,0.20)",
               borderWidth: 0,
-              label: { display: true, content: "Infertile", position: "center", color: "#166534" },
+              label: {
+                display: true,
+                content: preFertileConfirmed ? "Infertile" : "Uncertain",
+                position: "center",
+                color: preFertileConfirmed ? "#166534" : "#92400e",
+              },
             },
             fertile: {
               type: "box",
@@ -405,9 +410,14 @@ function buildChartUrl(args: {
               type: "box",
               xMin: stats.fertileEndDay + 0.5,
               xMax: totalDays + 0.5,
-              backgroundColor: "rgba(34,197,94,0.22)",
+              backgroundColor: postFertileConfirmed ? "rgba(34,197,94,0.22)" : "rgba(245,158,11,0.20)",
               borderWidth: 0,
-              label: { display: true, content: "Infertile", position: "center", color: "#166534" },
+              label: {
+                display: true,
+                content: postFertileConfirmed ? "Infertile" : "Uncertain",
+                position: "center",
+                color: postFertileConfirmed ? "#166534" : "#92400e",
+              },
             },
             ovulation: {
               type: "line",
