@@ -339,9 +339,18 @@ function buildChartUrl(args: {
     const t = temps.find((p) => p.day === d);
     return t ? t.temp : null;
   });
-  const pointColors = labels.map((d) =>
-    d >= stats.fertileStartDay && d <= stats.fertileEndDay ? "rgb(220,38,38)" : "rgb(22,163,74)",
-  );
+  // A day is only "confirmed safe" (green dot) when we have real evidence:
+  //  - pre-fertile days require ≥medium confidence (multiple cycles of history)
+  //  - post-fertile days require BBT-confirmed ovulation AND past the buffer
+  // Otherwise treat as uncertain (amber) — not confirmed fertile, but not safe.
+  const preFertileConfirmed = stats.confidence !== "low";
+  const postFertileConfirmed = stats.fertileWindowClosed;
+  const pointColors = labels.map((d) => {
+    if (d >= stats.fertileStartDay && d <= stats.fertileEndDay) return "rgb(220,38,38)"; // fertile - red
+    if (d <= periodLength) return "rgb(22,163,74)"; // bleeding - safe
+    if (d < stats.fertileStartDay) return preFertileConfirmed ? "rgb(22,163,74)" : "rgb(217,119,6)"; // amber if unsure
+    return postFertileConfirmed ? "rgb(22,163,74)" : "rgb(217,119,6)";
+  });
 
   const cfg = {
     type: "line",
