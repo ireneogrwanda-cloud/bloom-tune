@@ -66,10 +66,22 @@ function Dashboard() {
       })
     : null;
 
-  const temps = rawTemps.map((p) => ({
-    ...p,
-    fertile: stats ? p.day >= stats.fertileStartDay && p.day <= stats.fertileEndDay : false,
-  }));
+  // Day classification for chart coloring:
+  //  - "fertile": inside predicted/confirmed fertile window → red
+  //  - "safe": confidently infertile (bleeding, or pre/post window with enough evidence) → green
+  //  - "uncertain": low-confidence pre-window or unclosed post-window → red (treat as fertile)
+  const preFertileConfirmed = stats ? stats.confidence !== "low" : false;
+  const postFertileConfirmed = stats ? stats.fertileWindowClosed : false;
+  const temps = rawTemps.map((p) => {
+    let kind: "fertile" | "safe" | "uncertain" = "safe";
+    if (stats) {
+      if (p.day >= stats.fertileStartDay && p.day <= stats.fertileEndDay) kind = "fertile";
+      else if (p.day <= profile.period_length) kind = "safe";
+      else if (p.day < stats.fertileStartDay) kind = preFertileConfirmed ? "safe" : "uncertain";
+      else kind = postFertileConfirmed ? "safe" : "uncertain";
+    }
+    return { ...p, fertile: kind === "fertile", kind };
+  });
 
   async function onLog(e: React.FormEvent) {
     e.preventDefault();
@@ -157,7 +169,11 @@ function Dashboard() {
                   <XAxis dataKey="day" stroke="hsl(220 10% 45%)" tick={{ fontSize: 11 }} label={{ value: "Cycle day", position: "insideBottom", offset: -2, fill: "hsl(220 10% 45%)", fontSize: 11 }} />
                   <YAxis domain={[35.5, 37.5]} tickCount={5} stroke="hsl(220 10% 45%)" tick={{ fontSize: 11 }} />
                   <Tooltip
-                    formatter={(v: number, _n, item: any) => [`${v}°C`, item?.payload?.fertile ? "Fertile day" : "Low-fertility day"]}
+                    formatter={(v: number, _n, item: any) => {
+                      const k = item?.payload?.kind;
+                      const label = k === "fertile" ? "Fertile day" : k === "uncertain" ? "Treat as fertile (low confidence)" : "Low-fertility day";
+                      return [`${v}°C`, label];
+                    }}
                     labelFormatter={(d) => `Cycle day ${d}`}
                     contentStyle={{ borderRadius: 12, border: "1px solid hsl(220 15% 85%)", fontSize: 12 }}
                   />
@@ -199,8 +215,8 @@ function Dashboard() {
                     strokeWidth={2.5}
                     dot={(props: any) => {
                       const { cx, cy, payload, index } = props;
-                      const fertile = payload?.fertile;
-                      const fill = fertile ? "#dc2626" : "#16a34a";
+                      const kind = payload?.kind;
+                      const fill = kind === "safe" ? "#16a34a" : "#dc2626";
                       return (
                         <circle key={index} cx={cx} cy={cy} r={5} fill={fill} stroke="white" strokeWidth={2} />
                       );
@@ -213,8 +229,8 @@ function Dashboard() {
           </div>
           {temps.length > 0 && (
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#dc2626" }} /> Fertile day</span>
-              <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#16a34a" }} /> Low-fertility day</span>
+              <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#dc2626" }} /> Fertile / treat as fertile</span>
+              <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#16a34a" }} /> Confidently infertile</span>
               <span className="inline-flex items-center gap-1.5"><span className="inline-block h-2.5 w-3 rounded-sm" style={{ background: "hsl(340 82% 55% / 0.2)", border: "1px solid hsl(340 82% 55% / 0.4)" }} /> Predicted fertile window</span>
             </div>
           )}
