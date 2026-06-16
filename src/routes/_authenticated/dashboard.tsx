@@ -119,9 +119,15 @@ function Dashboard() {
             sub={stats.message}
           />
           <StatCard
-            label="Fertile window"
-            value={`Days ${stats.fertileStartDay}–${stats.fertileEndDay}`}
-            sub={stats.ovulationConfirmed ? "Confirmed by BBT" : "Calendar estimate"}
+            label="Ovulation"
+            value={
+              stats.ovulationConfirmed
+                ? `Day ${stats.estimatedOvulationDay}`
+                : stats.ovulationDayMin === stats.ovulationDayMax
+                  ? `~Day ${stats.estimatedOvulationDay}`
+                  : `Days ${stats.ovulationDayMin}–${stats.ovulationDayMax}`
+            }
+            sub={stats.ovulationConfirmed ? "Confirmed by BBT (3-over-6)" : `Estimated range · fertile window days ${stats.fertileStartDay}–${stats.fertileEndDay}`}
           />
         </div>
       )}
@@ -159,10 +165,31 @@ function Dashboard() {
                     <ReferenceArea
                       x1={stats.fertileStartDay}
                       x2={stats.fertileEndDay}
-                      fill="url(#fertileFill)"
-                      stroke="hsl(340 82% 55%)"
-                      strokeOpacity={0.25}
-                      label={{ value: "Fertile window", position: "insideTop", fontSize: 11, fill: "hsl(340 60% 40%)" }}
+                      fill={stats.ovulationConfirmed ? "hsl(142 70% 42% / 0.12)" : "url(#fertileFill)"}
+                      stroke={stats.ovulationConfirmed ? "hsl(142 70% 35%)" : "hsl(340 82% 55%)"}
+                      strokeOpacity={0.3}
+                      label={{
+                        value: stats.ovulationConfirmed ? "Fertile window (confirmed)" : "Predicted fertile window",
+                        position: "insideTop",
+                        fontSize: 11,
+                        fill: stats.ovulationConfirmed ? "hsl(142 60% 30%)" : "hsl(340 60% 40%)",
+                      }}
+                    />
+                  )}
+                  {stats && (
+                    <ReferenceArea
+                      x1={stats.ovulationDayMin}
+                      x2={stats.ovulationDayMax}
+                      fill={stats.ovulationConfirmed ? "hsl(280 70% 50% / 0.35)" : "hsl(280 70% 50% / 0.18)"}
+                      stroke="hsl(280 70% 45%)"
+                      strokeOpacity={0.5}
+                      strokeDasharray="3 3"
+                      label={{
+                        value: stats.ovulationConfirmed ? "Ovulation" : "Ovulation range",
+                        position: "insideBottom",
+                        fontSize: 10,
+                        fill: "hsl(280 60% 35%)",
+                      }}
                     />
                   )}
                   <Line
