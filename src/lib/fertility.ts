@@ -70,7 +70,10 @@ export function detectOvulation(points: TempPoint[], periodLength = 0): number |
     if (baseline.length < 3) continue;
     const rise = sorted.slice(i, i + 3);
     const baselineMax = Math.max(...baseline.map((p) => p.temp));
-    if (rise.every((p) => p.temp >= baselineMax + 0.2)) {
+    // Classical 3-over-6: each of the 3 rise temps must be strictly above the
+    // baseline max. We don't require a fixed +0.2°C buffer — user-reported FAM
+    // practice only needs 3 consecutive readings above the prior baseline.
+    if (rise.every((p) => p.temp > baselineMax)) {
       return sorted[i].day - 1;
     }
   }
