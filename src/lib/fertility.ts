@@ -24,6 +24,7 @@ export type CycleStats = {
   ovulationConfirmed: boolean;
   fertileWindowClosed: boolean;
   confidence: "low" | "medium" | "high";
+  cyclesAnalyzed: number;
   predictedCycleLength: number;
   cycleLengthStdDev: number;
   message: string;
