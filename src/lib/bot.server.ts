@@ -342,9 +342,10 @@ function buildChartUrl(args: {
   // Only paint a day GREEN when the algorithm is highly confident it's safe.
   // When evidence is missing we err on the side of caution and paint RED —
   // better to treat an uncertain day as fertile than to mislabel it as safe.
-  //  - pre-fertile days require ≥medium confidence (multiple cycles of history)
+  //  - pre-fertile days require ≥3 completed cycles of history (current-cycle
+  //    BBT confirmation says nothing about how early the fertile window opens)
   //  - post-fertile days require BBT-confirmed ovulation AND past the buffer
-  const preFertileConfirmed = stats.confidence !== "low";
+  const preFertileConfirmed = stats.cyclesAnalyzed >= 3;
   const postFertileConfirmed = stats.fertileWindowClosed;
   const pointColors = labels.map((d) => {
     if (d >= stats.fertileStartDay && d <= stats.fertileEndDay) return "rgb(220,38,38)"; // fertile - red

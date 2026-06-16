@@ -24,6 +24,7 @@ export type CycleStats = {
   ovulationConfirmed: boolean;
   fertileWindowClosed: boolean;
   confidence: "low" | "medium" | "high";
+  cyclesAnalyzed: number;
   predictedCycleLength: number;
   cycleLengthStdDev: number;
   message: string;
@@ -201,6 +202,7 @@ export function predictCycle(args: {
     ovulationConfirmed: detectedOv !== null,
     fertileWindowClosed,
     confidence,
+    cyclesAnalyzed: validHistory.length,
     predictedCycleLength,
     cycleLengthStdDev: Math.round(sd * 10) / 10,
     message,
