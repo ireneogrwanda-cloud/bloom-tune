@@ -1022,7 +1022,7 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
     temps,
     stats,
   });
-  await replyImage(profile, from, chartUrl, caption);
+  await replyImage(profile, from, await shortenChartUrl(chartUrl), caption);
 }
 
 export async function sendDailyLogReminders(now = new Date()) {
