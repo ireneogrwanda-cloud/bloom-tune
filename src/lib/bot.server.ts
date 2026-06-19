@@ -844,7 +844,7 @@ async function sendStatus(profile: any, from: string) {
     temps,
     stats,
   });
-  await replyImage(profile, from, chartUrl, caption);
+  await replyImage(profile, from, await shortenChartUrl(chartUrl), caption);
 }
 
 async function handleTempLog(profile: any, from: string, temp: number, day?: number, dateIso?: string) {
