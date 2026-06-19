@@ -171,7 +171,7 @@ function Dashboard() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 15% 80%)" opacity={0.35} />
-                  <XAxis dataKey="day" stroke="hsl(220 10% 45%)" tick={{ fontSize: 11 }} label={{ value: "Cycle day", position: "insideBottom", offset: -2, fill: "hsl(220 10% 45%)", fontSize: 11 }} />
+                  <XAxis dataKey="day" type="number" domain={[1, chartMaxDay]} allowDecimals={false} stroke="hsl(220 10% 45%)" tick={{ fontSize: 11 }} label={{ value: "Cycle day", position: "insideBottom", offset: -2, fill: "hsl(220 10% 45%)", fontSize: 11 }} />
                   <YAxis domain={[35.5, 37.5]} tickCount={5} stroke="hsl(220 10% 45%)" tick={{ fontSize: 11 }} />
                   <Tooltip
                     formatter={(v: number, _n, item: any) => {
