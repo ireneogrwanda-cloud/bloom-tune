@@ -200,7 +200,7 @@ function Dashboard() {
                   {stats && (
                     <ReferenceArea
                       x1={stats.fertileEndDay}
-                      x2={Math.max(profile.avg_cycle_length, stats.cycleDay)}
+                      x2={chartMaxDay}
                       fill={postFertileConfirmed ? "hsl(142 70% 42% / 0.12)" : "hsl(0 75% 55% / 0.16)"}
                       stroke={postFertileConfirmed ? "hsl(142 70% 35%)" : "hsl(0 75% 50%)"}
                       strokeOpacity={0.25}
