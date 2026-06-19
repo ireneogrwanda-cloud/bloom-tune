@@ -452,6 +452,28 @@ function buildChartUrl(args: {
   return `https://quickchart.io/chart?w=720&h=420&bkg=white&v=4&c=${encodeURIComponent(json)}`;
 }
 
+// QuickChart "create" endpoint returns a short, permanent URL. Twilio's media
+// URL field is capped at 4000 chars; the inline `?c=` GET URL frequently
+// exceeds that for long cycles, causing a 413 send failure (the bot then
+// appears "stuck" because the WhatsApp reply never goes out).
+async function shortenChartUrl(longUrl: string): Promise<string> {
+  if (longUrl.length <= 3500) return longUrl;
+  try {
+    const c = decodeURIComponent(longUrl.split("c=")[1] ?? "");
+    const res = await fetch("https://quickchart.io/chart/create", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chart: c, width: 720, height: 420, backgroundColor: "white", version: "4" }),
+    });
+    if (!res.ok) return longUrl;
+    const json = (await res.json()) as { url?: string };
+    return json.url ?? longUrl;
+  } catch (e) {
+    console.error("shortenChartUrl failed", e);
+    return longUrl;
+  }
+}
+
 
 async function getOrCreateActiveCycle(userId: string, cycleStartIso: string) {
   const { data: existing } = await supabaseAdmin
@@ -822,7 +844,7 @@ async function sendStatus(profile: any, from: string) {
     temps,
     stats,
   });
-  await replyImage(profile, from, chartUrl, caption);
+  await replyImage(profile, from, await shortenChartUrl(chartUrl), caption);
 }
 
 async function handleTempLog(profile: any, from: string, temp: number, day?: number, dateIso?: string) {
@@ -1000,7 +1022,7 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
     temps,
     stats,
   });
-  await replyImage(profile, from, chartUrl, caption);
+  await replyImage(profile, from, await shortenChartUrl(chartUrl), caption);
 }
 
 export async function sendDailyLogReminders(now = new Date()) {
