@@ -83,6 +83,11 @@ function Dashboard() {
     return { ...p, fertile: kind === "fertile", kind };
   });
 
+  const maxLogDay = rawTemps.reduce((m, p) => Math.max(m, p.day), 0);
+  const chartMaxDay = stats
+    ? Math.max(stats.predictedCycleLength, stats.fertileEndDay + 2, stats.cycleDay, maxLogDay)
+    : Math.max(profile.avg_cycle_length, maxLogDay, 1);
+
   async function onLog(e: React.FormEvent) {
     e.preventDefault();
     const t = parseFloat(temp);
@@ -166,7 +171,7 @@ function Dashboard() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 15% 80%)" opacity={0.35} />
-                  <XAxis dataKey="day" stroke="hsl(220 10% 45%)" tick={{ fontSize: 11 }} label={{ value: "Cycle day", position: "insideBottom", offset: -2, fill: "hsl(220 10% 45%)", fontSize: 11 }} />
+                  <XAxis dataKey="day" type="number" domain={[1, chartMaxDay]} allowDecimals={false} stroke="hsl(220 10% 45%)" tick={{ fontSize: 11 }} label={{ value: "Cycle day", position: "insideBottom", offset: -2, fill: "hsl(220 10% 45%)", fontSize: 11 }} />
                   <YAxis domain={[35.5, 37.5]} tickCount={5} stroke="hsl(220 10% 45%)" tick={{ fontSize: 11 }} />
                   <Tooltip
                     formatter={(v: number, _n, item: any) => {
@@ -195,7 +200,7 @@ function Dashboard() {
                   {stats && (
                     <ReferenceArea
                       x1={stats.fertileEndDay}
-                      x2={Math.max(profile.avg_cycle_length, stats.cycleDay)}
+                      x2={chartMaxDay}
                       fill={postFertileConfirmed ? "hsl(142 70% 42% / 0.12)" : "hsl(0 75% 55% / 0.16)"}
                       stroke={postFertileConfirmed ? "hsl(142 70% 35%)" : "hsl(0 75% 50%)"}
                       strokeOpacity={0.25}
