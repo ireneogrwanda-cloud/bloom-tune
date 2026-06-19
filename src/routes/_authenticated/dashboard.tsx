@@ -83,6 +83,11 @@ function Dashboard() {
     return { ...p, fertile: kind === "fertile", kind };
   });
 
+  const maxLogDay = rawTemps.reduce((m, p) => Math.max(m, p.day), 0);
+  const chartMaxDay = stats
+    ? Math.max(stats.predictedCycleLength, stats.fertileEndDay + 2, stats.cycleDay, maxLogDay)
+    : Math.max(profile.avg_cycle_length, maxLogDay, 1);
+
   async function onLog(e: React.FormEvent) {
     e.preventDefault();
     const t = parseFloat(temp);
