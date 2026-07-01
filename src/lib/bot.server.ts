@@ -911,18 +911,13 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
   const today = isoDate(new Date());
   const cycle = await getOrCreateActiveCycle(profile.id, today);
 
-  // Compute logged_for date. If the user provides only a cycle day (`d7`),
-  // save it to the date that corresponds to day 7 in the active cycle instead
-  // of saving every manual-day entry as "today". That preserves separate logs
-  // for d6/d7/d8 even when they are entered on the same calendar day.
   // Compute logged_for and (if needed) silently re-anchor the cycle start.
+  //  - Temperature only → save today's log.
+  //  - Only `dN` (no date) → save on that exact cycle day's date using the
+  //    active cycle start, so d6/d7/d8 are separate rows even if entered today.
   //  - Explicit date + cycle day → trust that pair, re-anchor so labels match.
-  //  - Only `dN` (no date) → treat the message date as day N and re-anchor.
-  //    Previously stored logs keep their own `logged_for` dates; the new anchor
-  //    just relabels their cycle-day, so nothing is overwritten or lost.
   //  - Only date (no dN) → save on that date with the existing anchor.
-  //  - Neither → save on today's date with the existing anchor.
-  const loggedFor = dateIso ?? today;
+  const loggedFor = day && !dateIso ? isoDate(addDays(new Date(cycle.started_on), day - 1)) : (dateIso ?? today);
   let cycleStartIso = cycle.started_on;
   if (day) {
     const desiredStart = isoDate(addDays(new Date(loggedFor), -(day - 1)));
