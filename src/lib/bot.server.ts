@@ -622,6 +622,28 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
     return;
   }
 
+  if (lower === "period" || lower === "/period" || lower === "periods") {
+    await reply(
+      profile,
+      from,
+      [
+        "🩸 *Can I conceive during my period?*",
+        "",
+        "Yes — it's uncommon, but possible. Here's how I decide 🟢 green vs 🔴 red on bleeding days:",
+        "",
+        "1️⃣ *With ≥3 logged cycles* — I know your shortest cycle. Period days that fall *before* the earliest possible fertile-window start are marked 🟢 green (infertile).",
+        "",
+        "2️⃣ *Short cycles (≤26 days)* — ovulation can happen as early as day 10–12. Sperm survive up to *5 days*, so the fertile window can open on day 5–7 and overlap with late bleeding. Those days are marked 🔴 red.",
+        "",
+        "3️⃣ *Fewer than 3 cycles logged* — I don't yet know your pattern, so I default to 🔴 red on period days to stay safe.",
+        "",
+        "4️⃣ *BBT confirmation doesn't apply here* — the temperature rise only confirms infertility *after* ovulation, never during your period.",
+        "",
+        "👉 *Bottom line:* conception during a period usually happens when a short cycle + long sperm survival makes the fertile window overlap with bleeding. Log every cycle so I can spot this risk for you.",
+      ].join("\n"),
+    );
+    return;
+
   // Language preference
   const langPick = parseLanguageCommand(trimmed, from);
   if (langPick) {
