@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { addDays, isoDate } from "@/lib/fertility";
 
 export const getDashboard = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -20,12 +21,14 @@ export const getDashboard = createServerFn({ method: "GET" })
     const activeCycle = cyclesRes.data?.find((c) => c.status === "active") ?? null;
     let logs: any[] = [];
     if (activeCycle) {
+      const extendedStart = isoDate(addDays(new Date(activeCycle.started_on), -14));
       const { data } = await supabase
         .from("temperature_logs")
         .select("*")
-        .eq("cycle_id", activeCycle.id)
+        .eq("user_id", userId)
+        .gte("logged_for", extendedStart)
         .order("logged_for");
-      logs = data ?? [];
+      logs = (data ?? []).filter((log) => log.cycle_id === activeCycle.id || log.logged_for >= activeCycle.started_on);
     }
     return {
       profile: profileRes.data,
