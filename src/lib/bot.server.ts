@@ -233,14 +233,20 @@ async function logOutbound(userId: string | null, body: string) {
   });
 }
 
-async function reply(profile: any, to: string, body: string) {
-  const translated = await translate(body, userLang(profile, to));
+const HELP_HINT = "\n\n💬 Type *help* anytime for more.";
+
+async function reply(profile: any, to: string, body: string, opts?: { hint?: boolean }) {
+  const withHint = opts?.hint === false ? body : body + HELP_HINT;
+  const translated = await translate(withHint, userLang(profile, to));
   await sendWhatsAppText(to, translated);
   await logOutbound(profile?.id ?? null, translated);
 }
 
-async function replyImage(profile: any, to: string, imageUrl: string, caption?: string) {
-  const cap = caption ? await translate(caption, userLang(profile, to)) : undefined;
+async function replyImage(profile: any, to: string, imageUrl: string, caption?: string, opts?: { hint?: boolean }) {
+  const finalCaption = caption
+    ? (opts?.hint === false ? caption : caption + HELP_HINT)
+    : undefined;
+  const cap = finalCaption ? await translate(finalCaption, userLang(profile, to)) : undefined;
   await sendWhatsAppImage(to, imageUrl, cap);
   if (cap) await logOutbound(profile?.id ?? null, `[chart] ${cap}`);
 }
@@ -586,6 +592,8 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
         "• Add a date or day, e.g. *36.7 2026-06-01*, *36.7 01/06*, *36.7 yesterday*, or *36.7 d5*",
         "• *status* — current cycle day, fertile window, and chart",
         "• *chart* — send your cycle chart now",
+        "• *history* — show your previous cycles (start date, length)",
+        "• *bleeding started <date>* — update the start date of your current period (e.g. *bleeding started yesterday* or *bleeding started 2026-06-01*)",
         "• *reset cycle* — mark today as day 1 of a new cycle",
         "• *lang english* / *lang french* / *lang local* — change reply language",
         "• *period* — can I get pregnant during my period? (explained)",
@@ -644,6 +652,57 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
     );
     return;
   }
+
+  if (lower === "history" || lower === "/history" || lower === "cycles") {
+    const { data: cycles } = await supabaseAdmin
+      .from("cycles")
+      .select("started_on, ended_on, status, ovulation_day")
+      .eq("user_id", profile.id)
+      .order("started_on", { ascending: false })
+      .limit(12);
+    if (!cycles || cycles.length === 0) {
+      await reply(profile, from, "📚 No cycles logged yet. Send *bleeding started <date>* to anchor your first one.");
+      return;
+    }
+    const lines = cycles.map((c) => {
+      const len = c.ended_on
+        ? Math.round((new Date(c.ended_on).getTime() - new Date(c.started_on).getTime()) / 86_400_000)
+        : null;
+      const status = c.status === "active" ? "🟠 active" : "✅ completed";
+      const lenTxt = len ? ` — ${len} days` : "";
+      const ovTxt = c.ovulation_day ? ` · ovulation d${c.ovulation_day}` : "";
+      return `• 🩸 ${c.started_on}${c.ended_on ? ` → ${c.ended_on}` : ""}${lenTxt} · ${status}${ovTxt}`;
+    });
+    await reply(profile, from, [`📚 *Your last ${cycles.length} cycle${cycles.length === 1 ? "" : "s"}*`, "", ...lines].join("\n"));
+    return;
+  }
+
+  // Update bleeding / period start date for the current cycle.
+  // e.g. "bleeding started yesterday", "period started 2026-06-01",
+  //      "bleeding started 01/06", "my period started 5 days ago"
+  const bleedingMatch = trimmed.match(/^\s*(?:my\s+)?(?:bleeding|period|menstruation)\s+(?:started|start|began|begins)\s+(.+)$/i);
+  if (bleedingMatch) {
+    const newStart = parseDateOnly(bleedingMatch[1]);
+    if (!newStart) {
+      await reply(profile, from, "📅 I didn't recognize that date. Try *bleeding started 2026-06-01*, *bleeding started 01/06*, *bleeding started yesterday*, or *bleeding started 5 days ago*.");
+      return;
+    }
+    const { data: activeCycle } = await supabaseAdmin
+      .from("cycles")
+      .select("id, started_on")
+      .eq("user_id", profile.id)
+      .eq("status", "active")
+      .order("started_on", { ascending: false })
+      .maybeSingle();
+    if (activeCycle) {
+      await supabaseAdmin.from("cycles").update({ started_on: newStart, ended_on: null, status: "active" }).eq("id", activeCycle.id);
+    } else {
+      await supabaseAdmin.from("cycles").insert({ user_id: profile.id, started_on: newStart, status: "active" });
+    }
+    await reply(profile, from, `✅ Updated — your current period started on *${newStart}*. Predictions will re-align from this date.`);
+    return;
+  }
+
 
 
 
@@ -913,11 +972,13 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
 
   // Compute logged_for and (if needed) silently re-anchor the cycle start.
   //  - Temperature only → save today's log.
-  //  - Only `dN` (no date) → save on that exact cycle day's date using the
-  //    active cycle start, so d6/d7/d8 are separate rows even if entered today.
+  //  - Only `dN` (no date) → user is saying "today is day N". Save at today
+  //    and re-anchor so today = day N. (Previously we saved at the OLD
+  //    anchor + N, which produced weeks-off dates when the stored anchor
+  //    was stale.)
   //  - Explicit date + cycle day → trust that pair, re-anchor so labels match.
   //  - Only date (no dN) → save on that date with the existing anchor.
-  const loggedFor = day && !dateIso ? isoDate(addDays(new Date(cycle.started_on), day - 1)) : (dateIso ?? today);
+  const loggedFor = dateIso ?? today;
   let cycleStartIso = cycle.started_on;
   if (day) {
     const desiredStart = isoDate(addDays(new Date(loggedFor), -(day - 1)));
