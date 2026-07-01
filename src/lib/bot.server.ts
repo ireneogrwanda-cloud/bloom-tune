@@ -654,26 +654,119 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
   }
 
   if (lower === "history" || lower === "/history" || lower === "cycles") {
-    const { data: cycles } = await supabaseAdmin
-      .from("cycles")
-      .select("started_on, ended_on, status, ovulation_day")
-      .eq("user_id", profile.id)
-      .order("started_on", { ascending: false })
-      .limit(12);
-    if (!cycles || cycles.length === 0) {
-      await reply(profile, from, "📚 No cycles logged yet. Send *bleeding started <date>* to anchor your first one.");
+    const [{ data: cyclesAsc }, { data: allLogs }] = await Promise.all([
+      supabaseAdmin
+        .from("cycles")
+        .select("id, started_on, ended_on, status, ovulation_day")
+        .eq("user_id", profile.id)
+        .order("started_on", { ascending: true }),
+      supabaseAdmin
+        .from("temperature_logs")
+        .select("logged_for, temp_celsius, cycle_id")
+        .eq("user_id", profile.id)
+        .order("logged_for", { ascending: true }),
+    ]);
+
+    const logs = allLogs ?? [];
+    if (logs.length === 0) {
+      await reply(profile, from, "📚 No temperatures logged yet. Send today's BBT (e.g. *36.55*) to start your history.");
       return;
     }
-    const lines = cycles.map((c) => {
-      const len = c.ended_on
-        ? Math.round((new Date(c.ended_on).getTime() - new Date(c.started_on).getTime()) / 86_400_000)
-        : null;
-      const status = c.status === "active" ? "🟠 active" : "✅ completed";
-      const lenTxt = len ? ` — ${len} days` : "";
-      const ovTxt = c.ovulation_day ? ` · ovulation d${c.ovulation_day}` : "";
-      return `• 🩸 ${c.started_on}${c.ended_on ? ` → ${c.ended_on}` : ""}${lenTxt} · ${status}${ovTxt}`;
+
+    // Build cycles from real data only. Anchor each segment on the recorded
+    // cycle's started_on; a cycle's end is the next cycle's start (exclusive)
+    // or, for the last active cycle, its most recent log date.
+    const cyclesSorted = (cyclesAsc ?? []).slice();
+    const todayISO = new Date().toISOString().slice(0, 10);
+
+    type Seg = { start: string; end: string; days: number; logCount: number; status: string; ovulationDay: number | null };
+    const segments: Seg[] = [];
+    for (let i = 0; i < cyclesSorted.length; i++) {
+      const c = cyclesSorted[i];
+      const nextStart = cyclesSorted[i + 1]?.started_on;
+      const segLogs = logs.filter((l) => l.logged_for >= c.started_on && (nextStart ? l.logged_for < nextStart : true));
+      if (segLogs.length === 0) continue; // skip imaginary cycles with no data
+      const lastLog = segLogs[segLogs.length - 1].logged_for;
+      const end = nextStart
+        ? // last day of this cycle is the day before the next cycle starts
+          new Date(new Date(nextStart).getTime() - 86_400_000).toISOString().slice(0, 10)
+        : lastLog;
+      const days = Math.max(
+        1,
+        Math.round((new Date(end).getTime() - new Date(c.started_on).getTime()) / 86_400_000) + 1,
+      );
+      segments.push({
+        start: c.started_on,
+        end,
+        days,
+        logCount: segLogs.length,
+        status: nextStart ? "✅ completed" : c.status === "active" ? "🟠 active" : "✅ completed",
+        ovulationDay: c.ovulation_day,
+      });
+    }
+
+    if (segments.length === 0) {
+      await reply(profile, from, "📚 I have your temperatures but no anchored cycles yet. Send *bleeding started <date>* to anchor cycle 1.");
+      return;
+    }
+
+    // Total logged span, in months (fractional — "1.5 months" if that's what
+    // the data shows).
+    const firstStart = segments[0].start;
+    const lastEnd = segments[segments.length - 1].end;
+    const spanDays = Math.round((new Date(lastEnd).getTime() - new Date(firstStart).getTime()) / 86_400_000) + 1;
+    const spanMonths = spanDays / 30.4375;
+    const spanMonthsTxt =
+      spanMonths >= 1 ? `${(Math.round(spanMonths * 2) / 2).toFixed(1).replace(/\.0$/, "")} month${spanMonths >= 1.5 ? "s" : ""}` : `${spanDays} day${spanDays === 1 ? "" : "s"}`;
+
+    const recent = segments.slice(-12).reverse();
+    const lines = recent.map((s) => {
+      const ovTxt = s.ovulationDay ? ` · ovulation d${s.ovulationDay}` : "";
+      return `• 🩸 ${s.start} → ${s.end} — ${s.days}d · ${s.logCount} log${s.logCount === 1 ? "" : "s"} · ${s.status}${ovTxt}`;
     });
-    await reply(profile, from, [`📚 *Your last ${cycles.length} cycle${cycles.length === 1 ? "" : "s"}*`, "", ...lines].join("\n"));
+    await reply(
+      profile,
+      from,
+      [
+        `📚 *Your logged history* — ${spanMonthsTxt} across ${segments.length} cycle${segments.length === 1 ? "" : "s"}, ${logs.length} temperature${logs.length === 1 ? "" : "s"}.`,
+        "",
+        ...lines,
+      ].join("\n"),
+    );
+
+    // Send a real-data chart: temperature over calendar dates, coloured per
+    // cycle. No predictions, no imagined bands — only what was logged.
+    const palette = ["#1e40af", "#be123c", "#166534", "#a16207", "#7c3aed", "#0f766e", "#b91c1c", "#334155"];
+    const datasets = segments.slice(-8).map((s, idx) => {
+      const color = palette[idx % palette.length];
+      return {
+        label: `Cycle ${s.start}`,
+        data: logs
+          .filter((l) => l.logged_for >= s.start && l.logged_for <= s.end)
+          .map((l) => ({ x: l.logged_for, y: Number(l.temp_celsius) })),
+        borderColor: color,
+        backgroundColor: color,
+        spanGaps: true,
+        tension: 0.3,
+        pointRadius: 3,
+      };
+    });
+    const cfg = {
+      type: "line",
+      data: { datasets },
+      options: {
+        plugins: {
+          title: { display: true, text: `BBT history — ${spanMonthsTxt}` },
+          legend: { display: true, position: "bottom" },
+        },
+        scales: {
+          y: { min: 35.5, max: 37.5, title: { display: true, text: "°C" } },
+          x: { type: "time", time: { unit: "day", tooltipFormat: "yyyy-MM-dd" }, title: { display: true, text: "Date" } },
+        },
+      },
+    };
+    const longUrl = `https://quickchart.io/chart?w=720&h=420&bkg=white&v=4&c=${encodeURIComponent(JSON.stringify(cfg))}`;
+    await replyImage(profile, from, await shortenChartUrl(longUrl), `📊 Your logged BBT over ${spanMonthsTxt}.`);
     return;
   }
 
