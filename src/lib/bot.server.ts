@@ -233,14 +233,20 @@ async function logOutbound(userId: string | null, body: string) {
   });
 }
 
-async function reply(profile: any, to: string, body: string) {
-  const translated = await translate(body, userLang(profile, to));
+const HELP_HINT = "\n\n💬 Type *help* anytime for more.";
+
+async function reply(profile: any, to: string, body: string, opts?: { hint?: boolean }) {
+  const withHint = opts?.hint === false ? body : body + HELP_HINT;
+  const translated = await translate(withHint, userLang(profile, to));
   await sendWhatsAppText(to, translated);
   await logOutbound(profile?.id ?? null, translated);
 }
 
-async function replyImage(profile: any, to: string, imageUrl: string, caption?: string) {
-  const cap = caption ? await translate(caption, userLang(profile, to)) : undefined;
+async function replyImage(profile: any, to: string, imageUrl: string, caption?: string, opts?: { hint?: boolean }) {
+  const finalCaption = caption
+    ? (opts?.hint === false ? caption : caption + HELP_HINT)
+    : undefined;
+  const cap = finalCaption ? await translate(finalCaption, userLang(profile, to)) : undefined;
   await sendWhatsAppImage(to, imageUrl, cap);
   if (cap) await logOutbound(profile?.id ?? null, `[chart] ${cap}`);
 }
