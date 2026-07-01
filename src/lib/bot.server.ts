@@ -653,6 +653,57 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
     return;
   }
 
+  if (lower === "history" || lower === "/history" || lower === "cycles") {
+    const { data: cycles } = await supabaseAdmin
+      .from("cycles")
+      .select("started_on, ended_on, status, ovulation_day")
+      .eq("user_id", profile.id)
+      .order("started_on", { ascending: false })
+      .limit(12);
+    if (!cycles || cycles.length === 0) {
+      await reply(profile, from, "📚 No cycles logged yet. Send *bleeding started <date>* to anchor your first one.");
+      return;
+    }
+    const lines = cycles.map((c) => {
+      const len = c.ended_on
+        ? Math.round((new Date(c.ended_on).getTime() - new Date(c.started_on).getTime()) / 86_400_000)
+        : null;
+      const status = c.status === "active" ? "🟠 active" : "✅ completed";
+      const lenTxt = len ? ` — ${len} days` : "";
+      const ovTxt = c.ovulation_day ? ` · ovulation d${c.ovulation_day}` : "";
+      return `• 🩸 ${c.started_on}${c.ended_on ? ` → ${c.ended_on}` : ""}${lenTxt} · ${status}${ovTxt}`;
+    });
+    await reply(profile, from, [`📚 *Your last ${cycles.length} cycle${cycles.length === 1 ? "" : "s"}*`, "", ...lines].join("\n"));
+    return;
+  }
+
+  // Update bleeding / period start date for the current cycle.
+  // e.g. "bleeding started yesterday", "period started 2026-06-01",
+  //      "bleeding started 01/06", "my period started 5 days ago"
+  const bleedingMatch = trimmed.match(/^\s*(?:my\s+)?(?:bleeding|period|menstruation)\s+(?:started|start|began|begins)\s+(.+)$/i);
+  if (bleedingMatch) {
+    const newStart = parseDateOnly(bleedingMatch[1]);
+    if (!newStart) {
+      await reply(profile, from, "📅 I didn't recognize that date. Try *bleeding started 2026-06-01*, *bleeding started 01/06*, *bleeding started yesterday*, or *bleeding started 5 days ago*.");
+      return;
+    }
+    const { data: activeCycle } = await supabaseAdmin
+      .from("cycles")
+      .select("id, started_on")
+      .eq("user_id", profile.id)
+      .eq("status", "active")
+      .order("started_on", { ascending: false })
+      .maybeSingle();
+    if (activeCycle) {
+      await supabaseAdmin.from("cycles").update({ started_on: newStart, ended_on: null, status: "active" }).eq("id", activeCycle.id);
+    } else {
+      await supabaseAdmin.from("cycles").insert({ user_id: profile.id, started_on: newStart, status: "active" });
+    }
+    await reply(profile, from, `✅ Updated — your current period started on *${newStart}*. Predictions will re-align from this date.`);
+    return;
+  }
+
+
 
 
   // Language preference
