@@ -588,6 +588,7 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
         "• *chart* — send your cycle chart now",
         "• *reset cycle* — mark today as day 1 of a new cycle",
         "• *lang english* / *lang french* / *lang local* — change reply language",
+        "• *period* — can I get pregnant during my period? (explained)",
         "• *help* — show this menu",
         "",
         "⏰ I'll remind you at *6:00 a.m. your local time* to log your BBT.",
