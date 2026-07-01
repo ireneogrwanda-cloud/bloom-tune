@@ -624,6 +624,31 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
   if (botState.awaiting_period_start) {
     const pendingParsed = parseTempAndDay(trimmed);
     if (pendingParsed) {
+      const { data: activeCycle } = await supabaseAdmin
+        .from("cycles")
+        .select("id")
+        .eq("user_id", profile.id)
+        .eq("status", "active")
+        .order("started_on", { ascending: false })
+        .maybeSingle();
+
+      // Existing users can be left in this state from an older prompt. If they
+      // already have an active cycle, don't keep asking for period day 1 every
+      // time they log with dN — clear the stale prompt and let handleTempLog
+      // silently realign the cycle start from the supplied day/date.
+      if (activeCycle) {
+        const nextState = {
+          ...botState,
+          awaiting_period_start: false,
+          pending_temp: undefined,
+          pending_day: undefined,
+          pending_logged_for: undefined,
+        };
+        await supabaseAdmin.from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
+        await handleTempLog({ ...profile, bot_state: nextState }, from, pendingParsed.temp, pendingParsed.day, pendingParsed.date);
+        return;
+      }
+
       const nextState = {
         ...botState,
         awaiting_period_start: true,
