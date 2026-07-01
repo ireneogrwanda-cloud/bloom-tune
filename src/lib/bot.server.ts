@@ -697,14 +697,24 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
         1,
         Math.round((new Date(end).getTime() - new Date(c.started_on).getTime()) / 86_400_000) + 1,
       );
+      // Detect ovulation from the *actual* logged temperatures in this cycle,
+      // not the value stored on the row (which may be a calendar estimate or stale).
+      const segStart = new Date(c.started_on).getTime();
+      const tempPoints: TempPoint[] = segLogs.map((l) => ({
+        day: Math.round((new Date(l.logged_for).getTime() - segStart) / 86_400_000) + 1,
+        temp: Number(l.temp_celsius),
+        date: l.logged_for,
+      }));
+      const detectedOv = detectOvulation(tempPoints, profile.period_length ?? 5);
       segments.push({
         start: c.started_on,
         end,
         days,
         logCount: segLogs.length,
         status: nextStart ? "✅ completed" : c.status === "active" ? "🟠 active" : "✅ completed",
-        ovulationDay: c.ovulation_day,
+        ovulationDay: detectedOv ?? c.ovulation_day,
       });
+
     }
 
     if (segments.length === 0) {
