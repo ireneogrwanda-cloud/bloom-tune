@@ -857,28 +857,9 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
   const loggedFor = dateIso ?? today;
   let cycleStartIso = cycle.started_on;
   if (day) {
-    const currentCycleDay = daysBetween(new Date(cycle.started_on), new Date(loggedFor)) + 1;
-    if (currentCycleDay !== day) {
-      const botState = readBotState(profile);
-      const nextState = {
-        ...botState,
-        awaiting_period_start: true,
-        pending_temp: temp,
-        pending_day: day,
-        pending_logged_for: loggedFor,
-      };
-      await supabaseAdmin.from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
-      await reply(
-        { ...profile, bot_state: nextState },
-        from,
-        `✅ I received ${temp.toFixed(2)}°C for cycle day ${day}.
-
-📅 Your saved cycle start makes ${loggedFor} look like day ${currentCycleDay}, so before I update the chart: what date was the *first day of your period* (day 1 of bleeding)?
-
-Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days ago*.`,
-      );
-      return;
-    }
+    // Trust the user's stated cycle day and silently realign the cycle
+    // start date. The period-start date was already confirmed when the
+    // cycle began — we don't re-ask on every log.
     cycleStartIso = isoDate(addDays(new Date(loggedFor), -(day - 1)));
     if (cycleStartIso !== cycle.started_on) {
       await supabaseAdmin.from("cycles").update({ started_on: cycleStartIso }).eq("id", cycle.id);
