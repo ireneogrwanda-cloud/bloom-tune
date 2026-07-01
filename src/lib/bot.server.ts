@@ -919,11 +919,13 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
 
   // Compute logged_for and (if needed) silently re-anchor the cycle start.
   //  - Temperature only → save today's log.
-  //  - Only `dN` (no date) → save on that exact cycle day's date using the
-  //    active cycle start, so d6/d7/d8 are separate rows even if entered today.
+  //  - Only `dN` (no date) → user is saying "today is day N". Save at today
+  //    and re-anchor so today = day N. (Previously we saved at the OLD
+  //    anchor + N, which produced weeks-off dates when the stored anchor
+  //    was stale.)
   //  - Explicit date + cycle day → trust that pair, re-anchor so labels match.
   //  - Only date (no dN) → save on that date with the existing anchor.
-  const loggedFor = day && !dateIso ? isoDate(addDays(new Date(cycle.started_on), day - 1)) : (dateIso ?? today);
+  const loggedFor = dateIso ?? today;
   let cycleStartIso = cycle.started_on;
   if (day) {
     const desiredStart = isoDate(addDays(new Date(loggedFor), -(day - 1)));
