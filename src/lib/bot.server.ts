@@ -494,18 +494,17 @@ async function getOrCreateActiveCycle(userId: string, cycleStartIso: string) {
 }
 
 async function getLogsForCycleChart(userId: string, cycleId: string, cycleStartIso: string) {
-  const extendedStart = isoDate(addDays(new Date(cycleStartIso), -14));
   const { data, error } = await supabaseAdmin
     .from("temperature_logs")
     .select("logged_for, temp_celsius, cycle_id")
     .eq("user_id", userId)
-    .gte("logged_for", extendedStart)
+    .or(`cycle_id.eq.${cycleId},logged_for.gte.${cycleStartIso}`)
     .order("logged_for");
   if (error) {
     console.error("getLogsForCycleChart error", error);
     return [];
   }
-  return (data ?? []).filter((log) => log.cycle_id === cycleId || log.logged_for >= cycleStartIso);
+  return data ?? [];
 }
 
 export async function handleIncomingMessage(args: {
