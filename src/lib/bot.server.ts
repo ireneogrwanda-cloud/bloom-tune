@@ -6,12 +6,14 @@ import { sendWhatsAppText, sendWhatsAppImage } from "./whatsapp.server";
 import {
   parseTemperature,
   predictCycle,
+  detectOvulation,
   isoDate,
   addDays,
   daysBetween,
   type TempPoint,
   type CycleStats,
 } from "./fertility";
+
 
 // Fetch lengths of completed past cycles (most-recent first, capped at 12).
 async function getCycleHistory(userId: string): Promise<number[]> {
