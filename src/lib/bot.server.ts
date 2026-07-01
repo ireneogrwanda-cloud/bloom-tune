@@ -643,6 +643,9 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
       ].join("\n"),
     );
     return;
+  }
+
+
 
   // Language preference
   const langPick = parseLanguageCommand(trimmed, from);
