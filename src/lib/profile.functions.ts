@@ -20,13 +20,11 @@ export const getDashboard = createServerFn({ method: "GET" })
     const activeCycle = cyclesRes.data?.find((c) => c.status === "active") ?? null;
     let logs: any[] = [];
     if (activeCycle) {
-      // Return ALL of the user's logs so nothing disappears from the chart
-      // after a cycle re-anchor or new-cycle event. Logs plot at their
-      // relative day (may be negative if before current cycle start).
       const { data } = await supabase
         .from("temperature_logs")
         .select("*")
         .eq("user_id", userId)
+        .or(`cycle_id.eq.${activeCycle.id},logged_for.gte.${activeCycle.started_on}`)
         .order("logged_for");
       logs = data ?? [];
     }

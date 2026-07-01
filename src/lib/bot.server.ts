@@ -493,14 +493,12 @@ async function getOrCreateActiveCycle(userId: string, cycleStartIso: string) {
   return data;
 }
 
-async function getLogsForCycleChart(userId: string, _cycleId: string, _cycleStartIso: string) {
-  // Return ALL of the user's logs. Logs never disappear from view when a cycle
-  // re-anchors or a new cycle starts — they simply plot at their relative day
-  // (which may be negative for logs before the current cycle start).
+async function getLogsForCycleChart(userId: string, cycleId: string, cycleStartIso: string) {
   const { data, error } = await supabaseAdmin
     .from("temperature_logs")
     .select("logged_for, temp_celsius, cycle_id")
     .eq("user_id", userId)
+    .or(`cycle_id.eq.${cycleId},logged_for.gte.${cycleStartIso}`)
     .order("logged_for");
   if (error) {
     console.error("getLogsForCycleChart error", error);
