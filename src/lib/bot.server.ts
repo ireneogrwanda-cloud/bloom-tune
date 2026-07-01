@@ -885,18 +885,24 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
   const today = isoDate(new Date());
   const cycle = await getOrCreateActiveCycle(profile.id, today);
 
-  // Compute logged_for date: explicit date wins, otherwise today. If the user
-  // supplies a cycle day, align day N to the logged date so all predicted dates
-  // match the day they just entered.
-  const loggedFor = dateIso ?? today;
+  // Compute logged_for date. If the user provides only a cycle day (`d7`),
+  // save it to the date that corresponds to day 7 in the active cycle instead
+  // of saving every manual-day entry as "today". That preserves separate logs
+  // for d6/d7/d8 even when they are entered on the same calendar day.
+  let loggedFor = dateIso ?? today;
   let cycleStartIso = cycle.started_on;
   if (day) {
-    // Trust the user's stated cycle day and silently realign the cycle
-    // start date. The period-start date was already confirmed when the
-    // cycle began — we don't re-ask on every log.
-    cycleStartIso = isoDate(addDays(new Date(loggedFor), -(day - 1)));
-    if (cycleStartIso !== cycle.started_on) {
-      await supabaseAdmin.from("cycles").update({ started_on: cycleStartIso }).eq("id", cycle.id);
+    if (dateIso) {
+      // When both date and cycle day are supplied, trust that pair and silently
+      // realign the cycle start so chart dates and cycle-day labels match.
+      cycleStartIso = isoDate(addDays(new Date(dateIso), -(day - 1)));
+      if (cycleStartIso !== cycle.started_on) {
+        await supabaseAdmin.from("cycles").update({ started_on: cycleStartIso }).eq("id", cycle.id);
+      }
+    } else {
+      // With `dN` alone, keep the existing cycle anchor and log the temperature
+      // on that cycle day. This avoids overwriting d6 when the next message is d7.
+      loggedFor = isoDate(addDays(new Date(cycleStartIso), day - 1));
     }
   }
 
