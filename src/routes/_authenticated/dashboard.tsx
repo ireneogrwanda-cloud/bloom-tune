@@ -84,9 +84,11 @@ function Dashboard() {
   });
 
   const maxLogDay = rawTemps.reduce((m, p) => Math.max(m, p.day), 0);
+  const minLogDay = rawTemps.reduce((m, p) => Math.min(m, p.day), 1);
   const chartMaxDay = stats
     ? Math.max(stats.predictedCycleLength, stats.fertileEndDay + 2, stats.cycleDay, maxLogDay)
     : Math.max(profile.avg_cycle_length, maxLogDay, 1);
+  const chartMinDay = Math.min(1, minLogDay);
 
   async function onLog(e: React.FormEvent) {
     e.preventDefault();
@@ -171,7 +173,7 @@ function Dashboard() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 15% 80%)" opacity={0.35} />
-                  <XAxis dataKey="day" type="number" domain={[1, chartMaxDay]} allowDecimals={false} stroke="hsl(220 10% 45%)" tick={{ fontSize: 11 }} label={{ value: "Cycle day", position: "insideBottom", offset: -2, fill: "hsl(220 10% 45%)", fontSize: 11 }} />
+                  <XAxis dataKey="day" type="number" domain={[chartMinDay, chartMaxDay]} allowDecimals={false} stroke="hsl(220 10% 45%)" tick={{ fontSize: 11 }} label={{ value: "Cycle day", position: "insideBottom", offset: -2, fill: "hsl(220 10% 45%)", fontSize: 11 }} />
                   <YAxis domain={[35.5, 37.5]} tickCount={5} stroke="hsl(220 10% 45%)" tick={{ fontSize: 11 }} />
                   <Tooltip
                     formatter={(v: number, _n, item: any) => {
