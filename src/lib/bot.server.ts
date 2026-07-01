@@ -6,12 +6,14 @@ import { sendWhatsAppText, sendWhatsAppImage } from "./whatsapp.server";
 import {
   parseTemperature,
   predictCycle,
+  detectOvulation,
   isoDate,
   addDays,
   daysBetween,
   type TempPoint,
   type CycleStats,
 } from "./fertility";
+
 
 // Fetch lengths of completed past cycles (most-recent first, capped at 12).
 async function getCycleHistory(userId: string): Promise<number[]> {
@@ -695,14 +697,24 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
         1,
         Math.round((new Date(end).getTime() - new Date(c.started_on).getTime()) / 86_400_000) + 1,
       );
+      // Detect ovulation from the *actual* logged temperatures in this cycle,
+      // not the value stored on the row (which may be a calendar estimate or stale).
+      const segStart = new Date(c.started_on).getTime();
+      const tempPoints: TempPoint[] = segLogs.map((l) => ({
+        day: Math.round((new Date(l.logged_for).getTime() - segStart) / 86_400_000) + 1,
+        temp: Number(l.temp_celsius),
+        date: l.logged_for,
+      }));
+      const detectedOv = detectOvulation(tempPoints, profile.period_length ?? 5);
       segments.push({
         start: c.started_on,
         end,
         days,
         logCount: segLogs.length,
         status: nextStart ? "✅ completed" : c.status === "active" ? "🟠 active" : "✅ completed",
-        ovulationDay: c.ovulation_day,
+        ovulationDay: detectedOv ?? c.ovulation_day,
       });
+
     }
 
     if (segments.length === 0) {
@@ -721,9 +733,10 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
 
     const recent = segments.slice(-12).reverse();
     const lines = recent.map((s) => {
-      const ovTxt = s.ovulationDay ? ` · ovulation d${s.ovulationDay}` : "";
+      const ovTxt = s.ovulationDay ? ` · 🥚 ovulation d${s.ovulationDay} (from BBT)` : " · ovulation not detected";
       return `• 🩸 ${s.start} → ${s.end} — ${s.days}d · ${s.logCount} log${s.logCount === 1 ? "" : "s"} · ${s.status}${ovTxt}`;
     });
+
     await reply(
       profile,
       from,
