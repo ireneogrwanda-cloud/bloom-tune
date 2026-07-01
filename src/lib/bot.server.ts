@@ -592,6 +592,8 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
         "• Add a date or day, e.g. *36.7 2026-06-01*, *36.7 01/06*, *36.7 yesterday*, or *36.7 d5*",
         "• *status* — current cycle day, fertile window, and chart",
         "• *chart* — send your cycle chart now",
+        "• *history* — show your previous cycles (start date, length)",
+        "• *bleeding started <date>* — update the start date of your current period (e.g. *bleeding started yesterday* or *bleeding started 2026-06-01*)",
         "• *reset cycle* — mark today as day 1 of a new cycle",
         "• *lang english* / *lang french* / *lang local* — change reply language",
         "• *period* — can I get pregnant during my period? (explained)",
