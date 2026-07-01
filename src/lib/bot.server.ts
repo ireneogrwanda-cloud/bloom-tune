@@ -733,9 +733,10 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
 
     const recent = segments.slice(-12).reverse();
     const lines = recent.map((s) => {
-      const ovTxt = s.ovulationDay ? ` · ovulation d${s.ovulationDay}` : "";
+      const ovTxt = s.ovulationDay ? ` · 🥚 ovulation d${s.ovulationDay} (from BBT)` : " · ovulation not detected";
       return `• 🩸 ${s.start} → ${s.end} — ${s.days}d · ${s.logCount} log${s.logCount === 1 ? "" : "s"} · ${s.status}${ovTxt}`;
     });
+
     await reply(
       profile,
       from,
