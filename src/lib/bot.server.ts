@@ -333,12 +333,11 @@ function buildChartUrl(args: {
   stats: CycleStats;
 }): string {
   const { avgCycleLength, periodLength, temps, stats } = args;
-  const totalDays = Math.max(avgCycleLength, stats.cycleDay, 28);
-  const labels = Array.from({ length: totalDays }, (_, i) => i + 1);
-  const data = labels.map((d) => {
-    const t = temps.find((p) => p.day === d);
-    return t ? t.temp : null;
-  });
+  const minTempDay = temps.reduce((m, p) => Math.min(m, p.day), 1);
+  const maxTempDay = temps.reduce((m, p) => Math.max(m, p.day), 1);
+  const minDay = Math.min(1, minTempDay);
+  const maxDay = Math.max(avgCycleLength, stats.cycleDay, stats.fertileEndDay + 2, maxTempDay, 28);
+  const data = temps.map((p) => ({ x: p.day, y: p.temp }));
   // Only paint a day GREEN when the algorithm is highly confident it's safe.
   // When evidence is missing we err on the side of caution and paint RED —
   // better to treat an uncertain day as fertile than to mislabel it as safe.
@@ -347,17 +346,17 @@ function buildChartUrl(args: {
   //  - post-fertile days require BBT-confirmed ovulation AND past the buffer
   const preFertileConfirmed = stats.cyclesAnalyzed >= 3;
   const postFertileConfirmed = stats.fertileWindowClosed;
-  const pointColors = labels.map((d) => {
+  const colorForDay = (d: number) => {
     if (d >= stats.fertileStartDay && d <= stats.fertileEndDay) return "rgb(220,38,38)"; // fertile - red
     if (d <= periodLength) return "rgb(22,163,74)"; // bleeding - safe
     if (d < stats.fertileStartDay) return preFertileConfirmed ? "rgb(22,163,74)" : "rgb(220,38,38)";
     return postFertileConfirmed ? "rgb(22,163,74)" : "rgb(220,38,38)";
-  });
+  };
+  const pointColors = temps.map((p) => colorForDay(p.day));
 
   const cfg = {
     type: "line",
     data: {
-      labels,
       datasets: [
         {
           label: "BBT (°C)",
@@ -381,7 +380,7 @@ function buildChartUrl(args: {
           annotations: {
             periodBox: {
               type: "box",
-              xMin: 0.5,
+              xMin: 1,
               xMax: periodLength + 0.5,
               backgroundColor: "rgba(190,18,60,0.18)",
               borderWidth: 0,
@@ -411,7 +410,7 @@ function buildChartUrl(args: {
             postFertile: {
               type: "box",
               xMin: stats.fertileEndDay + 0.5,
-              xMax: totalDays + 0.5,
+              xMax: maxDay,
               backgroundColor: postFertileConfirmed ? "rgba(34,197,94,0.22)" : "rgba(239,68,68,0.22)",
               borderWidth: 0,
               label: {
@@ -444,7 +443,7 @@ function buildChartUrl(args: {
       },
       scales: {
         y: { min: 35.5, max: 37.5, title: { display: true, text: "°C" } },
-        x: { title: { display: true, text: "Cycle day" } },
+        x: { type: "linear", min: minDay, max: maxDay, title: { display: true, text: "Cycle day" }, ticks: { stepSize: 1 } },
       },
     },
   };
@@ -492,6 +491,20 @@ async function getOrCreateActiveCycle(userId: string, cycleStartIso: string) {
     .single();
   if (error) throw error;
   return data;
+}
+
+async function getLogsForCycleChart(userId: string, cycleId: string, cycleStartIso: string) {
+  const { data, error } = await supabaseAdmin
+    .from("temperature_logs")
+    .select("logged_for, temp_celsius, cycle_id")
+    .eq("user_id", userId)
+    .or(`cycle_id.eq.${cycleId},logged_for.gte.${cycleStartIso}`)
+    .order("logged_for");
+  if (error) {
+    console.error("getLogsForCycleChart error", error);
+    return [];
+  }
+  return data ?? [];
 }
 
 export async function handleIncomingMessage(args: {
@@ -805,15 +818,11 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
 
 async function sendStatus(profile: any, from: string) {
   const cycle = await getOrCreateActiveCycle(profile.id, isoDate(new Date()));
-  const { data: logs } = await supabaseAdmin
-    .from("temperature_logs")
-    .select("logged_for, temp_celsius")
-    .eq("cycle_id", cycle.id)
-    .order("logged_for");
+  const logs = await getLogsForCycleChart(profile.id, cycle.id, cycle.started_on);
 
   const cycleStart = new Date(cycle.started_on);
   const temps: TempPoint[] =
-    (logs ?? []).map((l) => ({
+    logs.map((l) => ({
       day: Math.floor(
         (new Date(l.logged_for).getTime() - cycleStart.getTime()) / 86400000,
       ) + 1,
@@ -939,14 +948,10 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
   }
 
   // Build prediction with all logs in this cycle
-  const { data: logs } = await supabaseAdmin
-    .from("temperature_logs")
-    .select("logged_for, temp_celsius")
-    .eq("cycle_id", cycle.id)
-    .order("logged_for");
+  const logs = await getLogsForCycleChart(profile.id, cycle.id, cycleStartIso);
 
   const temps: TempPoint[] =
-    (logs ?? []).map((l) => ({
+    logs.map((l) => ({
       day: Math.floor(
         (new Date(l.logged_for).getTime() - cycleStart.getTime()) / 86400000,
       ) + 1,

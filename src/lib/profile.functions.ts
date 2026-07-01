@@ -23,7 +23,8 @@ export const getDashboard = createServerFn({ method: "GET" })
       const { data } = await supabase
         .from("temperature_logs")
         .select("*")
-        .eq("cycle_id", activeCycle.id)
+        .eq("user_id", userId)
+        .or(`cycle_id.eq.${activeCycle.id},logged_for.gte.${activeCycle.started_on}`)
         .order("logged_for");
       logs = data ?? [];
     }
