@@ -915,20 +915,20 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
   // save it to the date that corresponds to day 7 in the active cycle instead
   // of saving every manual-day entry as "today". That preserves separate logs
   // for d6/d7/d8 even when they are entered on the same calendar day.
-  let loggedFor = dateIso ?? today;
+  // Compute logged_for and (if needed) silently re-anchor the cycle start.
+  //  - Explicit date + cycle day → trust that pair, re-anchor so labels match.
+  //  - Only `dN` (no date) → treat the message date as day N and re-anchor.
+  //    Previously stored logs keep their own `logged_for` dates; the new anchor
+  //    just relabels their cycle-day, so nothing is overwritten or lost.
+  //  - Only date (no dN) → save on that date with the existing anchor.
+  //  - Neither → save on today's date with the existing anchor.
+  const loggedFor = dateIso ?? today;
   let cycleStartIso = cycle.started_on;
   if (day) {
-    if (dateIso) {
-      // When both date and cycle day are supplied, trust that pair and silently
-      // realign the cycle start so chart dates and cycle-day labels match.
-      cycleStartIso = isoDate(addDays(new Date(dateIso), -(day - 1)));
-      if (cycleStartIso !== cycle.started_on) {
-        await supabaseAdmin.from("cycles").update({ started_on: cycleStartIso }).eq("id", cycle.id);
-      }
-    } else {
-      // With `dN` alone, keep the existing cycle anchor and log the temperature
-      // on that cycle day. This avoids overwriting d6 when the next message is d7.
-      loggedFor = isoDate(addDays(new Date(cycleStartIso), day - 1));
+    const desiredStart = isoDate(addDays(new Date(loggedFor), -(day - 1)));
+    if (desiredStart !== cycle.started_on) {
+      cycleStartIso = desiredStart;
+      await supabaseAdmin.from("cycles").update({ started_on: cycleStartIso }).eq("id", cycle.id);
     }
   }
 
