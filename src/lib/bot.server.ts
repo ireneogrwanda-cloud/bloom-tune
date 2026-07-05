@@ -453,7 +453,7 @@ function buildChartUrl(args: {
       },
       scales: {
         y: { min: 35.5, max: 37.5, title: { display: true, text: "°C" } },
-        x: { type: "linear", min: minDay, max: maxDay, offset: false, bounds: "ticks", title: { display: true, text: "Cycle day" }, ticks: { stepSize: 1, autoSkip: false, includeBounds: false, callback: "function(v){return Number.isInteger(v)?v:''}" } },
+        x: { type: "linear", min: minDay, max: maxDay, offset: false, bounds: "ticks", title: { display: true, text: "Cycle day" }, ticks: { stepSize: 1, autoSkip: false, precision: 0 } },
       },
     },
   };
