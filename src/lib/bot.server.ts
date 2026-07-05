@@ -390,7 +390,7 @@ function buildChartUrl(args: {
           annotations: {
             periodBox: {
               type: "box",
-              xMin: 1,
+              xMin: 0.5,
               xMax: periodLength + 0.5,
               backgroundColor: "rgba(190,18,60,0.18)",
               borderWidth: 0,
