@@ -366,9 +366,7 @@ function buildChartUrl(args: {
   const pointColors = temps.map((p) => colorForDay(p.day));
 
   const tickLabelIntegers = `function(value) { return Number.isInteger(Number(value)) ? String(value) : ''; }`;
-  const xGridAtDayEdges = `function(context) { var value = context && context.tick ? Number(context.tick.value) : NaN; return Number.isInteger(value + 0.5) ? 'rgba(0,0,0,0.1)' : 'rgba(0,0,0,0)'; }`;
   const yTickLabelHalves = `function(value) { return Number.isInteger(Number(value) * 2) ? Number(value).toFixed(1) : ''; }`;
-  const yGridAtRowEdges = `function(context) { var value = context && context.tick ? Number(context.tick.value) : NaN; return Number.isInteger(value * 2 + 0.5) ? 'rgba(0,0,0,0.1)' : 'rgba(0,0,0,0)'; }`;
 
   const cfg = {
     type: "line",
@@ -468,18 +466,14 @@ function buildChartUrl(args: {
             stepSize: 0.5,
             callback: tickLabelIntegers,
           },
-          grid: { color: xGridAtDayEdges },
         },
       },
     },
   };
   (cfg.options.scales.y as any).ticks.callback = yTickLabelHalves;
-  (cfg.options.scales.y as any).grid = { color: yGridAtRowEdges };
   const chartJs = JSON.stringify(cfg)
     .replace(JSON.stringify(tickLabelIntegers), tickLabelIntegers)
-    .replace(JSON.stringify(xGridAtDayEdges), xGridAtDayEdges)
-    .replace(JSON.stringify(yTickLabelHalves), yTickLabelHalves)
-    .replace(JSON.stringify(yGridAtRowEdges), yGridAtRowEdges);
+    .replace(JSON.stringify(yTickLabelHalves), yTickLabelHalves);
   return `https://quickchart.io/chart?w=720&h=420&bkg=white&v=4&c=${encodeURIComponent(chartJs)}`;
 }
 
