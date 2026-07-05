@@ -341,9 +341,10 @@ function buildChartUrl(args: {
   stats: CycleStats;
 }): string {
   const { avgCycleLength, periodLength, temps, stats } = args;
-  const minTempDay = temps.reduce((m, p) => Math.min(m, p.day), 1);
   const maxTempDay = temps.reduce((m, p) => Math.max(m, p.day), 1);
-  const minDay = Math.min(1, minTempDay);
+  // Always anchor the chart at cycle day 1 so the x-axis and shaded regions
+  // line up with the labels (Period starts at day 1).
+  const minDay = 1;
   const maxDay = Math.max(avgCycleLength, stats.cycleDay, stats.fertileEndDay + 2, maxTempDay, 28);
   const data = temps.map((p) => ({ x: p.day, y: p.temp }));
   // Only paint a day GREEN when the algorithm is highly confident it's safe.
