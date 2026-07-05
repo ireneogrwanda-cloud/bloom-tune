@@ -365,6 +365,11 @@ function buildChartUrl(args: {
   };
   const pointColors = temps.map((p) => colorForDay(p.day));
 
+  const tickLabelIntegers = `function(value) { return Number.isInteger(Number(value)) ? String(value) : ''; }`;
+  const xGridAtDayEdges = `function(context) { return Number.isInteger(Number(context.tick.value + 0.5)) ? 'rgba(0,0,0,0.1)' : 'rgba(0,0,0,0)'; }`;
+  const yTickLabelHalves = `function(value) { return Number.isInteger(Number(value) * 2) ? Number(value).toFixed(1) : ''; }`;
+  const yGridAtRowEdges = `function(context) { return Number.isInteger(Number(context.tick.value * 2 + 0.5)) ? 'rgba(0,0,0,0.1)' : 'rgba(0,0,0,0)'; }`;
+
   const cfg = {
     type: "line",
     data: {
@@ -461,14 +466,21 @@ function buildChartUrl(args: {
           title: { display: true, text: "Cycle day" },
           ticks: {
             stepSize: 1,
-            callback: (value: number | string) => (Number.isInteger(Number(value)) ? String(value) : ""),
+            callback: tickLabelIntegers,
           },
+          grid: { color: xGridAtDayEdges },
         },
       },
     },
   };
-  const json = JSON.stringify(cfg);
-  return `https://quickchart.io/chart?w=720&h=420&bkg=white&v=4&c=${encodeURIComponent(json)}`;
+  (cfg.options.scales.y as any).ticks.callback = yTickLabelHalves;
+  (cfg.options.scales.y as any).grid = { color: yGridAtRowEdges };
+  const chartJs = JSON.stringify(cfg)
+    .replace(JSON.stringify(tickLabelIntegers), tickLabelIntegers)
+    .replace(JSON.stringify(xGridAtDayEdges), xGridAtDayEdges)
+    .replace(JSON.stringify(yTickLabelHalves), yTickLabelHalves)
+    .replace(JSON.stringify(yGridAtRowEdges), yGridAtRowEdges);
+  return `https://quickchart.io/chart?w=720&h=420&bkg=white&v=4&c=${encodeURIComponent(chartJs)}`;
 }
 
 // QuickChart "create" endpoint returns a short, permanent URL. Twilio's media
