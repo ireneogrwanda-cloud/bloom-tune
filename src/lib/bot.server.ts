@@ -341,9 +341,10 @@ function buildChartUrl(args: {
   stats: CycleStats;
 }): string {
   const { avgCycleLength, periodLength, temps, stats } = args;
-  const minTempDay = temps.reduce((m, p) => Math.min(m, p.day), 1);
   const maxTempDay = temps.reduce((m, p) => Math.max(m, p.day), 1);
-  const minDay = Math.min(1, minTempDay);
+  // Always anchor the chart at cycle day 1 so the x-axis and shaded regions
+  // line up with the labels (Period starts at day 1).
+  const minDay = 1;
   const maxDay = Math.max(avgCycleLength, stats.cycleDay, stats.fertileEndDay + 2, maxTempDay, 28);
   const data = temps.map((p) => ({ x: p.day, y: p.temp }));
   // Only paint a day GREEN when the algorithm is highly confident it's safe.
@@ -392,7 +393,7 @@ function buildChartUrl(args: {
               xMax: periodLength + 0.5,
               backgroundColor: "rgba(190,18,60,0.18)",
               borderWidth: 0,
-              label: { display: true, content: "Period", position: "start", color: "#9f1239" },
+              label: { display: true, content: "Period", position: "center", color: "#9f1239" },
             },
             preFertile: {
               type: "box",
@@ -435,7 +436,7 @@ function buildChartUrl(args: {
               borderColor: "rgb(220,38,38)",
               borderWidth: 2,
               borderDash: [6, 4],
-              label: { display: true, content: "Ovulation", position: "end", color: "#991b1b" },
+              label: { display: true, content: "Ovulation", position: "end", color: "#991b1b", yAdjust: 12 },
             },
             today: {
               type: "line",
@@ -444,7 +445,7 @@ function buildChartUrl(args: {
               borderColor: "rgb(15,23,42)",
               borderWidth: 1,
               borderDash: [2, 2],
-              label: { display: true, content: "Today", position: "start", color: "#0f172a" },
+              label: { display: true, content: "Today", position: "end", color: "#0f172a", yAdjust: -12 },
             },
           },
         },
