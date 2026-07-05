@@ -342,12 +342,10 @@ function buildChartUrl(args: {
 }): string {
   const { avgCycleLength, periodLength, temps, stats } = args;
   const maxTempDay = temps.reduce((m, p) => Math.max(m, p.day), 1);
-  // Render each cycle day as a full column: day 1 occupies 0.5–1.5, so the
-  // plotted point and tick label sit in the middle of the first day column
-  // instead of on the chart edge.
-  const minDay = 0.5;
+  // Always anchor the chart at cycle day 1 so the x-axis and shaded regions
+  // line up with the labels (Period starts at day 1).
+  const minDay = 1;
   const maxDay = Math.max(avgCycleLength, stats.cycleDay, stats.fertileEndDay + 2, maxTempDay, 28);
-  const maxDayEdge = maxDay + 0.5;
   const data = temps.map((p) => ({ x: p.day, y: p.temp }));
   // Only paint a day GREEN when the algorithm is highly confident it's safe.
   // When evidence is missing we err on the side of caution and paint RED —
@@ -364,9 +362,6 @@ function buildChartUrl(args: {
     return postFertileConfirmed ? "rgb(22,163,74)" : "rgb(220,38,38)";
   };
   const pointColors = temps.map((p) => colorForDay(p.day));
-
-  const tickLabelIntegers = `function(value) { return Number.isInteger(Number(value)) ? String(value) : ''; }`;
-  const yTickLabelHalves = `function(value) { return Number.isInteger(Number(value) * 2) ? Number(value).toFixed(1) : ''; }`;
 
   const cfg = {
     type: "line",
@@ -394,7 +389,7 @@ function buildChartUrl(args: {
           annotations: {
             periodBox: {
               type: "box",
-              xMin: minDay,
+              xMin: 1,
               xMax: periodLength + 0.5,
               backgroundColor: "rgba(190,18,60,0.18)",
               borderWidth: 0,
@@ -424,7 +419,7 @@ function buildChartUrl(args: {
             postFertile: {
               type: "box",
               xMin: stats.fertileEndDay + 0.5,
-              xMax: maxDayEdge,
+              xMax: maxDay,
               backgroundColor: postFertileConfirmed ? "rgba(34,197,94,0.22)" : "rgba(239,68,68,0.22)",
               borderWidth: 0,
               label: {
@@ -456,25 +451,13 @@ function buildChartUrl(args: {
         },
       },
       scales: {
-        y: { min: 35.25, max: 37.75, title: { display: true, text: "°C" }, ticks: { stepSize: 0.25 } },
-        x: {
-          type: "linear",
-          min: minDay,
-          max: maxDayEdge,
-          title: { display: true, text: "Cycle day" },
-          ticks: {
-            stepSize: 0.5,
-            callback: tickLabelIntegers,
-          },
-        },
+        y: { min: 35.5, max: 37.5, title: { display: true, text: "°C" } },
+        x: { type: "linear", min: minDay, max: maxDay, title: { display: true, text: "Cycle day" }, ticks: { stepSize: 1 } },
       },
     },
   };
-  (cfg.options.scales.y as any).ticks.callback = yTickLabelHalves;
-  const chartJs = JSON.stringify(cfg)
-    .replace(JSON.stringify(tickLabelIntegers), tickLabelIntegers)
-    .replace(JSON.stringify(yTickLabelHalves), yTickLabelHalves);
-  return `https://quickchart.io/chart?w=720&h=420&bkg=white&v=4&c=${encodeURIComponent(chartJs)}`;
+  const json = JSON.stringify(cfg);
+  return `https://quickchart.io/chart?w=720&h=420&bkg=white&v=4&c=${encodeURIComponent(json)}`;
 }
 
 // QuickChart "create" endpoint returns a short, permanent URL. Twilio's media
