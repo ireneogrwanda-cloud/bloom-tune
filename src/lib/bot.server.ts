@@ -366,9 +366,9 @@ function buildChartUrl(args: {
   const pointColors = temps.map((p) => colorForDay(p.day));
 
   const tickLabelIntegers = `function(value) { return Number.isInteger(Number(value)) ? String(value) : ''; }`;
-  const xGridAtDayEdges = `function(context) { return Number.isInteger(Number(context.tick.value + 0.5)) ? 'rgba(0,0,0,0.1)' : 'rgba(0,0,0,0)'; }`;
+  const xGridAtDayEdges = `function(context) { var value = context && context.tick ? Number(context.tick.value) : NaN; return Number.isInteger(value + 0.5) ? 'rgba(0,0,0,0.1)' : 'rgba(0,0,0,0)'; }`;
   const yTickLabelHalves = `function(value) { return Number.isInteger(Number(value) * 2) ? Number(value).toFixed(1) : ''; }`;
-  const yGridAtRowEdges = `function(context) { return Number.isInteger(Number(context.tick.value * 2 + 0.5)) ? 'rgba(0,0,0,0.1)' : 'rgba(0,0,0,0)'; }`;
+  const yGridAtRowEdges = `function(context) { var value = context && context.tick ? Number(context.tick.value) : NaN; return Number.isInteger(value * 2 + 0.5) ? 'rgba(0,0,0,0.1)' : 'rgba(0,0,0,0)'; }`;
 
   const cfg = {
     type: "line",
@@ -458,14 +458,14 @@ function buildChartUrl(args: {
         },
       },
       scales: {
-        y: { min: 35.25, max: 37.75, title: { display: true, text: "°C" }, ticks: { stepSize: 0.5 } },
+        y: { min: 35.25, max: 37.75, title: { display: true, text: "°C" }, ticks: { stepSize: 0.25 } },
         x: {
           type: "linear",
           min: minDay,
           max: maxDayEdge,
           title: { display: true, text: "Cycle day" },
           ticks: {
-            stepSize: 1,
+            stepSize: 0.5,
             callback: tickLabelIntegers,
           },
           grid: { color: xGridAtDayEdges },
