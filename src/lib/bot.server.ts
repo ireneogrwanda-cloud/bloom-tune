@@ -436,7 +436,7 @@ function buildChartUrl(args: {
               borderColor: "rgb(220,38,38)",
               borderWidth: 2,
               borderDash: [6, 4],
-              label: { display: true, content: "Ovulation", position: "end", color: "#991b1b" },
+              label: { display: true, content: "Ovulation", position: "end", color: "#991b1b", yAdjust: 12 },
             },
             today: {
               type: "line",
@@ -445,7 +445,7 @@ function buildChartUrl(args: {
               borderColor: "rgb(15,23,42)",
               borderWidth: 1,
               borderDash: [2, 2],
-              label: { display: true, content: "Today", position: "start", color: "#0f172a" },
+              label: { display: true, content: "Today", position: "end", color: "#0f172a", yAdjust: -12 },
             },
           },
         },
