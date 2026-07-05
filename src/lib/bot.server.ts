@@ -393,7 +393,7 @@ function buildChartUrl(args: {
               xMax: periodLength + 0.5,
               backgroundColor: "rgba(190,18,60,0.18)",
               borderWidth: 0,
-              label: { display: true, content: "Period", position: "start", color: "#9f1239" },
+              label: { display: true, content: "Period", position: "center", color: "#9f1239" },
             },
             preFertile: {
               type: "box",
