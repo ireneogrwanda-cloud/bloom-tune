@@ -1001,11 +1001,28 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
     return;
   }
 
-  // Fallback: friendly hint
+  // Fallback: use AI to understand the user's intent and respond helpfully
+  const smart = await interpretUnknown(trimmed, profile);
+  if (smart?.intent === "status" || smart?.intent === "chart") {
+    await sendStatus(profile, from);
+    return;
+  }
+  if (smart?.intent === "history") {
+    await sendHistory(profile, from);
+    return;
+  }
+  if (smart?.intent === "help") {
+    // Re-dispatch help by recursing with "help"
+    await handleMessage(from, "help", `${Date.now()}-help`, {});
+    return;
+  }
+  const answer = smart?.reply?.trim();
   await reply(
     profile,
     from,
-    `I didn't catch a temperature in that. Send a number like *36.7* (or *36.7 d5* to log a past day), or *help* for commands.`,
+    answer && answer.length > 0
+      ? answer
+      : `I want to help but I'm not sure what you meant. You can send a temperature like *36.7*, ask about your cycle, or type *help* to see everything I can do.`,
   );
 }
 
