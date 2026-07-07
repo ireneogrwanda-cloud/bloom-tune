@@ -1076,7 +1076,6 @@ Rules:
     return null;
   }
 }
-}
 
 async function sendStatus(profile: any, from: string) {
   const cycle = await getOrCreateActiveCycle(profile.id, isoDate(new Date()));
