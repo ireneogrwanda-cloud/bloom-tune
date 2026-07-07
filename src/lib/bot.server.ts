@@ -1001,19 +1001,14 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
     return;
   }
 
-  // Fallback: use AI to understand the user's intent and respond helpfully
-  const smart = await interpretUnknown(trimmed, profile);
+  // Fallback: use AI to understand intent and reply helpfully, or dispatch a known command.
+  const smart = await interpretUnknown(trimmed, profile, from);
   if (smart?.intent === "status" || smart?.intent === "chart") {
     await sendStatus(profile, from);
     return;
   }
-  if (smart?.intent === "history") {
-    await sendHistory(profile, from);
-    return;
-  }
-  if (smart?.intent === "help") {
-    // Re-dispatch help by recursing with "help"
-    await handleMessage(from, "help", `${Date.now()}-help`, {});
+  if (smart?.intent === "history" || smart?.intent === "help") {
+    await handleIncomingMessage({ from, waMessageId: `${waMessageId}-${smart.intent}`, text: smart.intent, raw: {} });
     return;
   }
   const answer = smart?.reply?.trim();
@@ -1024,6 +1019,63 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
       ? answer
       : `I want to help but I'm not sure what you meant. You can send a temperature like *36.7*, ask about your cycle, or type *help* to see everything I can do.`,
   );
+}
+
+// Ask the AI gateway to classify an unrecognized message. Returns an intent
+// (to dispatch a known command) or a warm, on-topic reply that answers the
+// user directly in the context of fertility tracking.
+async function interpretUnknown(
+  text: string,
+  profile: any,
+  phone: string,
+): Promise<{ intent?: "help" | "status" | "chart" | "history"; reply?: string } | null> {
+  const key = process.env.LOVABLE_API_KEY;
+  if (!key) return null;
+  const lang = userLang(profile, phone);
+  const system = `You are Mira, a warm WhatsApp fertility-tracking companion. A user sent a message the bot's parser did not recognize. Understand what they mean and respond.
+
+Available commands you can DISPATCH by returning an "intent":
+- "help" — show all commands and BBT usage tips
+- "status" — show current cycle day, fertile window, and chart
+- "chart" — same as status
+- "history" — show past cycles with graph
+
+Return STRICT JSON, no prose, no markdown fences:
+{ "intent": "help" | "status" | "chart" | "history" | null, "reply": string | null }
+
+Rules:
+- If the message clearly maps to one of the intents above, set "intent" and leave "reply" null.
+- Otherwise set "intent" to null and write a short, warm "reply" (max 3 short sentences) that answers the user's question in the fertility/BBT context, or gently guides them. Use *asterisks* for bold on WhatsApp. Never invent medical advice — this is not a contraceptive method.
+- Always end "reply" with a friendly nudge like: "Type *help* anytime for more."
+- Reply language: ${lang}. Write "reply" natively in that language.`;
+
+  try {
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: text },
+        ],
+        response_format: { type: "json_object" },
+      }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const raw = data?.choices?.[0]?.message?.content?.trim();
+    if (!raw) return null;
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+    const parsed = JSON.parse(cleaned);
+    const intent = ["help", "status", "chart", "history"].includes(parsed?.intent) ? parsed.intent : undefined;
+    const reply = typeof parsed?.reply === "string" ? parsed.reply : undefined;
+    return { intent, reply };
+  } catch (e) {
+    console.error("interpretUnknown failed", e);
+    return null;
+  }
+}
 }
 
 async function sendStatus(profile: any, from: string) {
