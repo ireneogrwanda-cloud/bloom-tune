@@ -455,8 +455,16 @@ function buildChartUrl(args: {
         },
       },
       scales: {
-        y: { min: 35.5, max: 37.5, title: { display: true, text: "°C" } },
-        x: { type: "linear", min: minDay, max: maxDay, offset: false, bounds: "ticks", title: { display: true, text: "Cycle day" }, ticks: { stepSize: 1, autoSkip: false, precision: 0 } },
+        y: { min: 35.5, max: 37.5, title: { display: true, text: "°C" }, grid: { color: "rgba(15,23,42,0.06)" } },
+        x: {
+          type: "linear",
+          min: minDay,
+          max: maxDay,
+          offset: true,
+          title: { display: true, text: "Cycle day" },
+          ticks: { stepSize: 1, autoSkip: false, precision: 0 },
+          grid: { offset: true, color: "rgba(15,23,42,0.25)", drawTicks: true, tickLength: 6 },
+        },
       },
     },
   };
