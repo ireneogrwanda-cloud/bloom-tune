@@ -340,29 +340,31 @@ function buildChartUrl(args: {
   temps: TempPoint[];
   stats: CycleStats;
 }): string {
-  const { avgCycleLength, periodLength, temps, stats } = args;
+  const { avgCycleLength, periodLength, temps: rawTemps, stats } = args;
+  // Chart.js connects points in dataset order (not x order). Logs come out
+  // ordered by calendar date, but re-anchoring the cycle can make earlier
+  // dates map to higher cycle days, which draws a jagged/backtracking line
+  // that hides previous points. Sort by cycle day and dedupe (keep last
+  // logged temp per day) so the line reads left-to-right cleanly and every
+  // prior point still shows up.
+  const byDay = new Map<number, TempPoint>();
+  for (const p of rawTemps) byDay.set(p.day, p);
+  const temps = [...byDay.values()].sort((a, b) => a.day - b.day);
   const maxTempDay = temps.reduce((m, p) => Math.max(m, p.day), 1);
-  // Anchor the chart just before cycle day 1 so day 1 itself is fully visible
-  // (with `min: 1` a data point at x=1 sits flush on the axis edge and the
-  // Period band gets clipped, making the chart look like it starts on day 2+).
-  const minDay = 1;
+  const minTempDay = temps.reduce((m, p) => Math.min(m, p.day), 1);
+  const minDay = Math.min(1, minTempDay);
   const maxDay = Math.max(avgCycleLength, stats.cycleDay, stats.fertileEndDay + 2, maxTempDay, 28);
   const data = temps.map((p) => ({ x: p.day, y: p.temp }));
-  // Only paint a day GREEN when the algorithm is highly confident it's safe.
-  // When evidence is missing we err on the side of caution and paint RED —
-  // better to treat an uncertain day as fertile than to mislabel it as safe.
-  //  - pre-fertile days require ≥3 completed cycles of history (current-cycle
-  //    BBT confirmation says nothing about how early the fertile window opens)
-  //  - post-fertile days require BBT-confirmed ovulation AND past the buffer
   const preFertileConfirmed = stats.cyclesAnalyzed >= 3;
   const postFertileConfirmed = stats.fertileWindowClosed;
   const colorForDay = (d: number) => {
-    if (d >= stats.fertileStartDay && d <= stats.fertileEndDay) return "rgb(220,38,38)"; // fertile - red
-    if (d <= periodLength) return "rgb(22,163,74)"; // bleeding - safe
+    if (d >= stats.fertileStartDay && d <= stats.fertileEndDay) return "rgb(220,38,38)";
+    if (d <= periodLength) return "rgb(22,163,74)";
     if (d < stats.fertileStartDay) return preFertileConfirmed ? "rgb(22,163,74)" : "rgb(220,38,38)";
     return postFertileConfirmed ? "rgb(22,163,74)" : "rgb(220,38,38)";
   };
   const pointColors = temps.map((p) => colorForDay(p.day));
+
 
   const cfg = {
     type: "line",
