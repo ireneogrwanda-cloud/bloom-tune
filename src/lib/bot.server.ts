@@ -345,8 +345,8 @@ function buildChartUrl(args: {
   // Anchor the chart just before cycle day 1 so day 1 itself is fully visible
   // (with `min: 1` a data point at x=1 sits flush on the axis edge and the
   // Period band gets clipped, making the chart look like it starts on day 2+).
-  const minDay = 0.5;
-  const maxDay = Math.max(avgCycleLength, stats.cycleDay, stats.fertileEndDay + 2, maxTempDay, 28) + 0.5;
+  const minDay = 1;
+  const maxDay = Math.max(avgCycleLength, stats.cycleDay, stats.fertileEndDay + 2, maxTempDay, 28);
   const data = temps.map((p) => ({ x: p.day, y: p.temp }));
   // Only paint a day GREEN when the algorithm is highly confident it's safe.
   // When evidence is missing we err on the side of caution and paint RED —
@@ -374,8 +374,11 @@ function buildChartUrl(args: {
           borderColor: "rgb(30,64,175)",
           backgroundColor: "rgba(30,64,175,0.15)",
           spanGaps: true,
-          tension: 0.3,
-          pointRadius: 4,
+          tension: 0,
+          borderWidth: 2.5,
+          showLine: true,
+          pointRadius: 5,
+          pointHoverRadius: 5,
           pointBackgroundColor: pointColors,
           pointBorderColor: "white",
           pointBorderWidth: 1.5,
@@ -452,8 +455,16 @@ function buildChartUrl(args: {
         },
       },
       scales: {
-        y: { min: 35.5, max: 37.5, title: { display: true, text: "°C" } },
-        x: { type: "linear", min: minDay, max: maxDay, offset: false, bounds: "ticks", title: { display: true, text: "Cycle day" }, ticks: { stepSize: 1, autoSkip: false, precision: 0 } },
+        y: { min: 35.5, max: 37.5, title: { display: true, text: "°C" }, grid: { color: "rgba(15,23,42,0.06)" } },
+        x: {
+          type: "linear",
+          min: minDay,
+          max: maxDay,
+          offset: true,
+          title: { display: true, text: "Cycle day" },
+          ticks: { stepSize: 1, autoSkip: false, precision: 0 },
+          grid: { offset: true, color: "rgba(15,23,42,0.25)", drawTicks: true, tickLength: 6 },
+        },
       },
     },
   };
@@ -503,12 +514,15 @@ async function getOrCreateActiveCycle(userId: string, cycleStartIso: string) {
   return data;
 }
 
-async function getLogsForCycleChart(userId: string, cycleId: string, cycleStartIso: string) {
+async function getLogsForCycleChart(userId: string, _cycleId: string, _cycleStartIso: string) {
+  // Pull ALL of this user's logs so previously-recorded temperatures never
+  // disappear from the chart when a new one is added (re-anchoring the cycle
+  // start or filtering by cycle_id would otherwise silently drop earlier
+  // entries the user is expecting to still see).
   const { data, error } = await supabaseAdmin
     .from("temperature_logs")
     .select("logged_for, temp_celsius, cycle_id")
     .eq("user_id", userId)
-    .or(`cycle_id.eq.${cycleId},logged_for.gte.${cycleStartIso}`)
     .order("logged_for");
   if (error) {
     console.error("getLogsForCycleChart error", error);
