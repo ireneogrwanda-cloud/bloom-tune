@@ -503,12 +503,15 @@ async function getOrCreateActiveCycle(userId: string, cycleStartIso: string) {
   return data;
 }
 
-async function getLogsForCycleChart(userId: string, cycleId: string, cycleStartIso: string) {
+async function getLogsForCycleChart(userId: string, _cycleId: string, _cycleStartIso: string) {
+  // Pull ALL of this user's logs so previously-recorded temperatures never
+  // disappear from the chart when a new one is added (re-anchoring the cycle
+  // start or filtering by cycle_id would otherwise silently drop earlier
+  // entries the user is expecting to still see).
   const { data, error } = await supabaseAdmin
     .from("temperature_logs")
     .select("logged_for, temp_celsius, cycle_id")
     .eq("user_id", userId)
-    .or(`cycle_id.eq.${cycleId},logged_for.gte.${cycleStartIso}`)
     .order("logged_for");
   if (error) {
     console.error("getLogsForCycleChart error", error);
