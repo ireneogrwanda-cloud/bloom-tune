@@ -1096,15 +1096,35 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
   //    was stale.)
   //  - Explicit date + cycle day → trust that pair, re-anchor so labels match.
   //  - Only date (no dN) → save on that date with the existing anchor.
-  const loggedFor = dateIso ?? today;
+  let loggedFor = dateIso ?? today;
   let cycleStartIso = cycle.started_on;
   if (day) {
-    const desiredStart = isoDate(addDays(new Date(loggedFor), -(day - 1)));
-    if (desiredStart !== cycle.started_on) {
-      cycleStartIso = desiredStart;
-      await supabaseAdmin.from("cycles").update({ started_on: cycleStartIso }).eq("id", cycle.id);
+    if (dateIso) {
+      // Explicit date + cycle day → trust that pair, re-anchor so labels match.
+      const desiredStart = isoDate(addDays(new Date(loggedFor), -(day - 1)));
+      if (desiredStart !== cycle.started_on) {
+        cycleStartIso = desiredStart;
+        await supabaseAdmin.from("cycles").update({ started_on: cycleStartIso }).eq("id", cycle.id);
+      }
+    } else {
+      // Only `dN`. If this cycle already has logs, the anchor is trusted:
+      // place the log on that cycle day's own date so back-filling d6/d7/d8 in
+      // one sitting creates separate rows instead of overwriting today's row.
+      // If there are no logs yet, treat it as "today is day N" and re-anchor.
+      const { count } = await supabaseAdmin
+        .from("temperature_logs")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", profile.id)
+        .gte("logged_for", cycle.started_on);
+      if ((count ?? 0) > 0) {
+        loggedFor = isoDate(addDays(new Date(cycle.started_on), day - 1));
+      } else {
+        cycleStartIso = isoDate(addDays(new Date(today), -(day - 1)));
+        await supabaseAdmin.from("cycles").update({ started_on: cycleStartIso }).eq("id", cycle.id);
+      }
     }
   }
+
 
   // If the user is past their average cycle length and we haven't already
   // asked today, pause and check whether bleeding has started.
