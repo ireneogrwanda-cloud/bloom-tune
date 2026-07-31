@@ -342,23 +342,16 @@ function buildChartUrl(args: {
 }): string {
   const { avgCycleLength, periodLength, temps, stats } = args;
   const maxTempDay = temps.reduce((m, p) => Math.max(m, p.day), 1);
-  // Anchor the chart just before cycle day 1 so day 1 itself is fully visible
-  // (with `min: 1` a data point at x=1 sits flush on the axis edge and the
-  // Period band gets clipped, making the chart look like it starts on day 2+).
   const minDay = 1;
   const maxDay = Math.max(avgCycleLength, stats.cycleDay, stats.fertileEndDay + 2, maxTempDay, 28);
   const data = temps.map((p) => ({ x: p.day, y: p.temp }));
-  // Only paint a day GREEN when the algorithm is highly confident it's safe.
-  // When evidence is missing we err on the side of caution and paint RED —
-  // better to treat an uncertain day as fertile than to mislabel it as safe.
-  //  - pre-fertile days require ≥3 completed cycles of history (current-cycle
-  //    BBT confirmation says nothing about how early the fertile window opens)
-  //  - post-fertile days require BBT-confirmed ovulation AND past the buffer
+
+  // Green = confident infertile, Red = fertile or uncertain.
   const preFertileConfirmed = stats.cyclesAnalyzed >= 3;
   const postFertileConfirmed = stats.fertileWindowClosed;
   const colorForDay = (d: number) => {
-    if (d >= stats.fertileStartDay && d <= stats.fertileEndDay) return "rgb(220,38,38)"; // fertile - red
-    if (d <= periodLength) return "rgb(22,163,74)"; // bleeding - safe
+    if (d >= stats.fertileStartDay && d <= stats.fertileEndDay) return "rgb(220,38,38)";
+    if (d <= periodLength) return "rgb(22,163,74)";
     if (d < stats.fertileStartDay) return preFertileConfirmed ? "rgb(22,163,74)" : "rgb(220,38,38)";
     return postFertileConfirmed ? "rgb(22,163,74)" : "rgb(220,38,38)";
   };
@@ -372,16 +365,16 @@ function buildChartUrl(args: {
           label: "BBT (°C)",
           data,
           borderColor: "rgb(30,64,175)",
-          backgroundColor: "rgba(30,64,175,0.15)",
+          backgroundColor: "rgba(30,64,175,0.08)",
           spanGaps: true,
-          tension: 0,
-          borderWidth: 2.5,
+          tension: 0.4,
+          borderWidth: 3,
           showLine: true,
-          pointRadius: 5,
-          pointHoverRadius: 5,
+          pointRadius: 6,
+          pointHoverRadius: 6,
           pointBackgroundColor: pointColors,
           pointBorderColor: "white",
-          pointBorderWidth: 1.5,
+          pointBorderWidth: 2,
         },
       ],
     },
@@ -389,70 +382,6 @@ function buildChartUrl(args: {
       plugins: {
         title: { display: true, text: `Cycle overview — day ${stats.cycleDay} of ~${avgCycleLength}` },
         legend: { display: false },
-        annotation: {
-          annotations: {
-            periodBox: {
-              type: "box",
-              xMin: 0.5,
-              xMax: periodLength + 0.5,
-              backgroundColor: "rgba(190,18,60,0.18)",
-              borderWidth: 0,
-              label: { display: true, content: "Period", position: "center", color: "#9f1239" },
-            },
-            preFertile: {
-              type: "box",
-              xMin: periodLength + 0.5,
-              xMax: stats.fertileStartDay - 0.5,
-              backgroundColor: preFertileConfirmed ? "rgba(34,197,94,0.22)" : "rgba(239,68,68,0.22)",
-              borderWidth: 0,
-              label: {
-                display: true,
-                content: preFertileConfirmed ? "Infertile" : "Treat as fertile",
-                position: "center",
-                color: preFertileConfirmed ? "#166534" : "#991b1b",
-              },
-            },
-            fertile: {
-              type: "box",
-              xMin: stats.fertileStartDay - 0.5,
-              xMax: stats.fertileEndDay + 0.5,
-              backgroundColor: "rgba(239,68,68,0.3)",
-              borderWidth: 0,
-              label: { display: true, content: "Fertile", position: "center", color: "#991b1b" },
-            },
-            postFertile: {
-              type: "box",
-              xMin: stats.fertileEndDay + 0.5,
-              xMax: maxDay,
-              backgroundColor: postFertileConfirmed ? "rgba(34,197,94,0.22)" : "rgba(239,68,68,0.22)",
-              borderWidth: 0,
-              label: {
-                display: true,
-                content: postFertileConfirmed ? "Infertile" : "Treat as fertile",
-                position: "center",
-                color: postFertileConfirmed ? "#166534" : "#991b1b",
-              },
-            },
-            ovulation: {
-              type: "line",
-              xMin: stats.estimatedOvulationDay,
-              xMax: stats.estimatedOvulationDay,
-              borderColor: "rgb(220,38,38)",
-              borderWidth: 2,
-              borderDash: [6, 4],
-              label: { display: true, content: "Ovulation", position: "end", color: "#991b1b", yAdjust: 12 },
-            },
-            today: {
-              type: "line",
-              xMin: stats.cycleDay,
-              xMax: stats.cycleDay,
-              borderColor: "rgb(15,23,42)",
-              borderWidth: 1,
-              borderDash: [2, 2],
-              label: { display: true, content: "Today", position: "end", color: "#0f172a", yAdjust: -12 },
-            },
-          },
-        },
       },
       scales: {
         y: { min: 35.5, max: 37.5, title: { display: true, text: "°C" }, grid: { color: "rgba(15,23,42,0.06)" } },
@@ -460,10 +389,9 @@ function buildChartUrl(args: {
           type: "linear",
           min: minDay,
           max: maxDay,
-          offset: true,
           title: { display: true, text: "Cycle day" },
           ticks: { stepSize: 1, autoSkip: false, precision: 0 },
-          grid: { offset: true, color: "rgba(15,23,42,0.25)", drawTicks: true, tickLength: 6 },
+          grid: { color: "rgba(15,23,42,0.08)" },
         },
       },
     },
