@@ -357,6 +357,27 @@ function buildChartUrl(args: {
   };
   const pointColors = temps.map((p) => colorForDay(p.day));
 
+  // Paint the background in fertile (red) / infertile (green) bands so the
+  // whole cycle window is readable at a glance, not just the logged dots.
+  const bands: { from: number; to: number; color: string }[] = [];
+  for (let d = Math.floor(minDay); d <= Math.ceil(maxDay); d++) {
+    const c = colorForDay(d) === "rgb(22,163,74)" ? "rgba(22,163,74,0.13)" : "rgba(220,38,38,0.13)";
+    const last = bands[bands.length - 1];
+    if (last && last.color === c) last.to = d + 0.5;
+    else bands.push({ from: d - 0.5, to: d + 0.5, color: c });
+  }
+  const annotations: Record<string, unknown> = {};
+  bands.forEach((b, i) => {
+    annotations[`band${i}`] = {
+      type: "box",
+      xMin: Math.max(minDay, b.from),
+      xMax: Math.min(maxDay, b.to),
+      backgroundColor: b.color,
+      borderWidth: 0,
+      drawTime: "beforeDatasetsDraw",
+    };
+  });
+
   const cfg = {
     type: "line",
     data: {
@@ -382,7 +403,9 @@ function buildChartUrl(args: {
       plugins: {
         title: { display: true, text: `Cycle overview — day ${stats.cycleDay} of ~${avgCycleLength}` },
         legend: { display: false },
+        annotation: { annotations },
       },
+
       scales: {
         y: { min: 35.5, max: 37.5, title: { display: true, text: "°C" }, grid: { color: "rgba(15,23,42,0.06)" } },
         x: {
