@@ -860,8 +860,84 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
     return;
   }
 
-  // Onboarding: waiting for the user's last-period start date.
   const botState = readBotState(profile);
+
+  // --- Fever / illness confirmation -----------------------------------------
+  // Triggered when a submitted temperature was at or above normal body temp.
+  if (botState.awaiting_fever_check) {
+    const pendingTemp = typeof botState.pending_fever_temp === "number" ? botState.pending_fever_temp : null;
+    const pendingDate =
+      typeof botState.pending_fever_date === "string" ? botState.pending_fever_date : isoDate(new Date());
+    if (!isYes(trimmed) && !isNo(trimmed)) {
+      await reply(profile, from, "🤒 Quick check first — *do you have a high fever or feel sick?* Reply *YES* or *NO*.");
+      return;
+    }
+    const cleared = {
+      ...botState,
+      awaiting_fever_check: false,
+      pending_fever_temp: undefined,
+      pending_fever_date: undefined,
+    };
+    await supabaseAdmin.from("profiles").update({ bot_state: cleared }).eq("id", profile.id);
+    profile = { ...profile, bot_state: cleared };
+
+    if (pendingTemp === null) {
+      await reply(profile, from, "👍 Thanks. Send your temperature again when you're ready (e.g. *36.52*).");
+      return;
+    }
+    if (isYes(trimmed)) {
+      await saveExcludedLog(profile, pendingTemp, pendingDate, "fever-or-illness");
+      await reply(
+        profile,
+        from,
+        `🤒 Sorry you're unwell. I've saved *${pendingTemp.toFixed(2)}°C* for ${pendingDate} but *excluded it from your fertility calculations* — fever raises body temperature and would look like a false ovulation rise.\n\n💧 Rest, hydrate, and log again once you feel better. Your predictions stay based on your healthy days.`,
+      );
+      return;
+    }
+    // NO — not sick, but still an unusually high reading: keep it, flagged in the reply.
+    await handleTempLog(profile, from, pendingTemp, undefined, pendingDate, { skipFeverCheck: true });
+    return;
+  }
+
+  // --- Morning checklist (sleep / wake time / alcohol) -----------------------
+  if (botState.awaiting_morning_check) {
+    const checkDate = typeof botState.morning_check_on === "string" ? botState.morning_check_on : isoDate(new Date());
+    if (!isYes(trimmed) && !isNo(trimmed)) {
+      await reply(
+        profile,
+        from,
+        "☀️ Before your temperature — did *any* of these happen last night?\n• Slept less than 3 consecutive hours\n• Woke up much later than usual\n• Drank alcohol\n\nReply *1* = YES (any of them) · *2* = NO (none).",
+      );
+      return;
+    }
+    const yes = isYes(trimmed);
+    const next = {
+      ...botState,
+      awaiting_morning_check: false,
+      ignore_temp_on: yes ? checkDate : undefined,
+    };
+    await supabaseAdmin.from("profiles").update({ bot_state: next }).eq("id", profile.id);
+    profile = { ...profile, bot_state: next };
+    await reply(
+      profile,
+      from,
+      yes
+        ? "⚠️ Thanks for telling me. Disrupted sleep, a late wake-up, or alcohol all distort BBT, so *today's reading won't count toward your fertility calculations*. Send it anyway if you'd like — I'll store it as a note only.\n\n🌡️ Send your temperature like *36.52*."
+        : "✅ Great — a clean baseline. Send your temperature now, before getting out of bed (e.g. *36.52*).",
+    );
+    return;
+  }
+
+  // --- Temperature input validation -----------------------------------------
+  // Reject anything outside the physical BBT range or without two decimals,
+  // before it can reach the logging or onboarding flows.
+  const tempCheck = checkTemperatureInput(trimmed);
+  if (tempCheck.attempt && !tempCheck.ok) {
+    await reply(profile, from, TEMP_ERROR_MSG);
+    return;
+  }
+
+  // Onboarding: waiting for the user's last-period start date.
   if (botState.awaiting_period_start) {
     const pendingParsed = parseTempAndDay(trimmed);
     if (pendingParsed) {
