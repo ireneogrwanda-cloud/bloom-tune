@@ -261,8 +261,8 @@ export function predictCycle(args: {
   } else if (cycleDay <= predictedCycleLength) {
     status = "post-ovulation";
     message = fertileWindowClosed
-      ? `Day ${cycleDay}. Luteal phase confirmed — temperature has stayed elevated for 3+ days. Fertility is low. Next period expected around day ${predictedCycleLength + 1}.`
-      : `Day ${cycleDay}. Likely post-ovulation, but not yet confirmed — fertility awareness methods need 3 consecutive elevated temperatures above the prior baseline before declaring the fertile window closed. Stay cautious.`;
+      ? `Day ${cycleDay}. Luteal phase confirmed — your temperatures have stayed elevated above your pre-ovulation baseline (a few missed logs don't change this). Fertility is low. Next period expected around day ${predictedCycleLength + 1}.`
+      : `Day ${cycleDay}. Likely post-ovulation, but not yet confirmed — fertility awareness methods need 3 elevated temperatures above your prior baseline (a couple of missed days are okay) before declaring the fertile window closed. Stay cautious.`;
   } else {
     status = "post-ovulation";
     message = `Day ${cycleDay}. Cycle is running longer than the ${predictedCycleLength}-day average; period may start any day.`;
