@@ -302,6 +302,56 @@ function parseTempAndDay(text: string): { temp: number; day?: number; date?: str
   return date ? { temp, date } : { temp };
 }
 
+// ---- Temperature input rules ------------------------------------------------
+// BBT physically lives in a narrow band. Anything outside it (or missing the
+// two-decimal precision a real BBT thermometer gives) is a typo or a fever
+// thermometer, not a usable data point.
+export const BBT_MIN_C = 35.0;
+export const BBT_MAX_C = 38.0;
+// At or above this, treat the reading as a possible fever and ask before using it.
+export const FEVER_C = 37.5;
+
+export const TEMP_ERROR_MSG =
+  "❌ This number is incorrect. Please check your thermometer and send a number with a two decimal point like *36.52*.";
+
+// Decide whether a message was an attempt to send a temperature, and whether
+// that attempt is valid. Date and cycle-day tokens are stripped first so
+// "36.52 d5" or "36.52 01/06" are not misread as bad numbers.
+export function checkTemperatureInput(text: string): { attempt: boolean; ok: boolean; value?: number } {
+  let t = ` ${text.trim()} `;
+  t = t.replace(/\b\d{4}-\d{1,2}-\d{1,2}\b/g, " ");
+  t = t.replace(/\b\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?\b/g, " ");
+  t = t.replace(/\b(?:d|day|cycle\s*day)\s*\d{1,3}\b/gi, " ");
+  t = t.replace(/\b\d{1,3}\s*days?\s*ago\b/gi, " ");
+
+  const m = t.match(/(\d{2,3}(?:[.,]\d+)?)\s*([cCfF])?\b/);
+  if (!m) return { attempt: false, ok: false };
+
+  const raw = m[1].replace(",", ".");
+  const decimals = raw.includes(".") ? raw.split(".")[1].length : 0;
+  const num = parseFloat(raw);
+  const unit = m[2]?.toLowerCase();
+
+  // Fahrenheit input: convert, then apply the same physical range.
+  if (unit === "f" || num > 80) {
+    const c = ((num - 32) * 5) / 9;
+    const rounded = Math.round(c * 100) / 100;
+    if (rounded < BBT_MIN_C || rounded > BBT_MAX_C) return { attempt: true, ok: false };
+    return { attempt: true, ok: true, value: rounded };
+  }
+
+  if (decimals !== 2) return { attempt: true, ok: false };
+  if (!isFinite(num) || num < BBT_MIN_C || num > BBT_MAX_C) return { attempt: true, ok: false };
+  return { attempt: true, ok: true, value: Math.round(num * 100) / 100 };
+}
+
+function isYes(t: string): boolean {
+  return /^\s*(1|yes|y|yep|yeah|yup|oui|yego|ego|sí|si|sim|ndabyemera)\b/i.test(t.trim());
+}
+function isNo(t: string): boolean {
+  return /^\s*(2|no|n|nope|nah|non|oya|nao|não)\b/i.test(t.trim());
+}
+
 // Parse a date out of free-text (no temperature required). Accepts ISO,
 // DD/MM[/YYYY], "today", "yesterday", or "N days ago".
 function parseDateOnly(text: string): string | null {
@@ -474,6 +524,9 @@ async function getLogsForCycleChart(userId: string, _cycleId: string, _cycleStar
     .from("temperature_logs")
     .select("logged_for, temp_celsius, cycle_id")
     .eq("user_id", userId)
+    // Days flagged as fever / illness / disrupted sleep are stored but must
+    // never influence the fertility algorithm or the chart curve.
+    .eq("excluded", false)
     .order("logged_for");
   if (error) {
     console.error("getLogsForCycleChart error", error);
