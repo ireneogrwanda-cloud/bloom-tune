@@ -268,9 +268,10 @@ export function predictCycle(args: {
     message = `Day ${cycleDay}. Cycle is running longer than the ${predictedCycleLength}-day average; period may start any day.`;
   }
 
-  // Ovulation range: collapses to single day when BBT-confirmed; otherwise
-  // spreads with cycle-length variability (±ceil(sd), min ±1).
-  const ovSpread = detectedOv !== null ? 0 : Math.max(1, Math.ceil(sd));
+  // Ovulation range: collapses to single day when BBT pins the exact day;
+  // spreads with cycle-length variability otherwise. A gap-tolerant luteal
+  // confirmation gives medium confidence (±1) rather than a tight point.
+  const ovSpread = detectedOv !== null ? 0 : luteal.confirmed ? 1 : Math.max(1, Math.ceil(sd));
   const ovulationDayMin = Math.max(1, ovulationDay - ovSpread);
   const ovulationDayMax = ovulationDay + ovSpread;
 
@@ -282,7 +283,7 @@ export function predictCycle(args: {
     fertileStartDay,
     fertileEndDay,
     status,
-    ovulationConfirmed: detectedOv !== null,
+    ovulationConfirmed,
     fertileWindowClosed,
     confidence,
     cyclesAnalyzed: validHistory.length,
