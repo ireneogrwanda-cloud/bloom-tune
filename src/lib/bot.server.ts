@@ -1354,7 +1354,42 @@ async function handleTempLog(
     return;
   }
 
+  // --- Fever guard ------------------------------------------------------------
+  // A reading at or above normal body temperature is very likely illness, not
+  // ovulation. Ask before letting it move the prediction.
+  if (!opts?.skipFeverCheck && temp >= FEVER_C) {
+    const feverState = {
+      ...botStateNow,
+      awaiting_fever_check: true,
+      pending_fever_temp: temp,
+      pending_fever_date: loggedFor,
+    };
+    await supabaseAdmin.from("profiles").update({ bot_state: feverState }).eq("id", profile.id);
+    await reply(
+      { ...profile, bot_state: feverState },
+      from,
+      `🤒 *${temp.toFixed(2)}°C is at or above normal body temperature.*\n\n*Do you have a high fever or feel sick?* Reply *YES* or *NO*.\n\nIf you're unwell, I'll exclude this day from your fertility calculations so it doesn't look like a false ovulation rise.`,
+    );
+    return;
+  }
+
+  // --- Disrupted-morning guard -------------------------------------------------
+  // The user answered YES to the morning checklist (short sleep, late wake-up,
+  // or alcohol) for this date, so the reading is stored but not counted.
+  if (botStateNow.ignore_temp_on === loggedFor) {
+    await saveExcludedLog(profile, temp, loggedFor, "disrupted-morning");
+    const clearedState = { ...botStateNow, ignore_temp_on: undefined };
+    await supabaseAdmin.from("profiles").update({ bot_state: clearedState }).eq("id", profile.id);
+    await reply(
+      { ...profile, bot_state: clearedState },
+      from,
+      `📝 Saved *${temp.toFixed(2)}°C* for ${loggedFor} as a note only — *excluded from your fertility calculations* because of short sleep, a late wake-up, or alcohol last night.\n\n😴 Aim for 3+ uninterrupted hours of sleep and measure at your usual time tomorrow for a reading that counts.`,
+    );
+    return;
+  }
+
   const cycleStart = new Date(cycleStartIso);
+
 
   // Upsert log for that date
   const { error: upErr } = await supabaseAdmin
