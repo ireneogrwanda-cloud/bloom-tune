@@ -184,12 +184,16 @@ export function predictCycle(args: {
   // around the calendar ovulation day).
   const calendarOv = predictedCycleLength - 14;
   const detectedOv = detectOvulation(temps, periodLength);
+  // Looser, gap-tolerant confirmation: even if we can't pin the exact ovulation
+  // day (missing logs break the tight 3-over-6 run), we may still be able to
+  // confirm the luteal phase has begun from a sustained mean shift.
+  const luteal = confirmLutealPhase(temps, periodLength);
 
   // If BBT hasn't confirmed ovulation but we have temps past the calendar
   // ovulation day that are still at baseline, ovulation likely hasn't happened
   // yet — push the estimate forward so the fertile window stays open.
   let calendarOvAdjusted = calendarOv;
-  if (detectedOv === null && temps.length >= 3) {
+  if (detectedOv === null && !luteal.confirmed && temps.length >= 3) {
     const sorted = [...temps].sort((a, b) => a.day - b.day);
     const lastDay = sorted[sorted.length - 1].day;
     const baselinePool = sorted.filter((p) => p.day > periodLength && p.day < calendarOv);
@@ -206,12 +210,13 @@ export function predictCycle(args: {
     }
   }
 
-  const ovulationDay = detectedOv ?? calendarOvAdjusted;
+  const ovulationDay =
+    detectedOv ?? (luteal.confirmed ? (luteal.ovulationDay ?? calendarOvAdjusted) : calendarOvAdjusted);
 
   // ---- 3. Confidence ---------------------------------------------------------
   let confidence: CycleStats["confidence"];
   if (detectedOv !== null) confidence = "high";
-  else if (validHistory.length >= 3) confidence = "medium";
+  else if (luteal.confirmed || validHistory.length >= 3) confidence = "medium";
   else confidence = "low";
 
   // ---- 4. Fertile window with variability buffer -----------------------------
@@ -222,9 +227,11 @@ export function predictCycle(args: {
   const fertileEndDay = ovulationDay + 1 + buffer;
 
   // Fertile window is "closed" (safe to say no protection needed) ONLY when
-  // BBT has confirmed ovulation via the 3-over-6 rule AND we are clearly past
-  // the post-ovulation buffer. A single high reading is NOT enough.
-  const fertileWindowClosed = detectedOv !== null && cycleDay > fertileEndDay;
+  // BBT has confirmed ovulation — either via the tight 3-over-6 rule OR the
+  // gap-tolerant luteal-phase confirmation — AND we are clearly past the
+  // post-ovulation buffer. A single high reading is NOT enough.
+  const ovulationConfirmed = detectedOv !== null || luteal.confirmed;
+  const fertileWindowClosed = ovulationConfirmed && cycleDay > fertileEndDay;
 
   // ---- 5. Status + human-readable message -----------------------------------
   let status: CycleStats["status"] = "unknown";
