@@ -140,6 +140,8 @@ export type Database = {
         Row: {
           created_at: string
           cycle_id: string | null
+          exclude_reason: string | null
+          excluded: boolean
           id: string
           logged_for: string
           notes: string | null
@@ -150,6 +152,8 @@ export type Database = {
         Insert: {
           created_at?: string
           cycle_id?: string | null
+          exclude_reason?: string | null
+          excluded?: boolean
           id?: string
           logged_for: string
           notes?: string | null
@@ -160,6 +164,8 @@ export type Database = {
         Update: {
           created_at?: string
           cycle_id?: string | null
+          exclude_reason?: string | null
+          excluded?: boolean
           id?: string
           logged_for?: string
           notes?: string | null

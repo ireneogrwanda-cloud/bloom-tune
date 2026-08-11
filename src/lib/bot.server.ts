@@ -237,10 +237,20 @@ async function logOutbound(userId: string | null, body: string) {
 
 const HELP_HINT = "\n\n💬 Type *help* anytime for more.";
 
+// When the bot runs behind the in-app web chat instead of WhatsApp, replies are
+// captured into this array (attached to the profile) instead of being sent
+// through Twilio.
+export type CapturedMessage = { text?: string; imageUrl?: string };
+function captureOf(profile: any): CapturedMessage[] | null {
+  return Array.isArray(profile?.__capture) ? (profile.__capture as CapturedMessage[]) : null;
+}
+
 async function reply(profile: any, to: string, body: string, opts?: { hint?: boolean }) {
   const withHint = opts?.hint === false ? body : body + HELP_HINT;
   const translated = await translate(withHint, userLang(profile, to));
-  await sendWhatsAppText(to, translated);
+  const cap = captureOf(profile);
+  if (cap) cap.push({ text: translated });
+  else await sendWhatsAppText(to, translated);
   await logOutbound(profile?.id ?? null, translated);
 }
 
@@ -249,7 +259,9 @@ async function replyImage(profile: any, to: string, imageUrl: string, caption?: 
     ? (opts?.hint === false ? caption : caption + HELP_HINT)
     : undefined;
   const cap = finalCaption ? await translate(finalCaption, userLang(profile, to)) : undefined;
-  await sendWhatsAppImage(to, imageUrl, cap);
+  const sink = captureOf(profile);
+  if (sink) sink.push({ text: cap, imageUrl });
+  else await sendWhatsAppImage(to, imageUrl, cap);
   if (cap) await logOutbound(profile?.id ?? null, `[chart] ${cap}`);
 }
 
@@ -300,6 +312,56 @@ function parseTempAndDay(text: string): { temp: number; day?: number; date?: str
   }
 
   return date ? { temp, date } : { temp };
+}
+
+// ---- Temperature input rules ------------------------------------------------
+// BBT physically lives in a narrow band. Anything outside it (or missing the
+// two-decimal precision a real BBT thermometer gives) is a typo or a fever
+// thermometer, not a usable data point.
+export const BBT_MIN_C = 35.0;
+export const BBT_MAX_C = 38.0;
+// At or above this, treat the reading as a possible fever and ask before using it.
+export const FEVER_C = 37.5;
+
+export const TEMP_ERROR_MSG =
+  "❌ This number is incorrect. Please check your thermometer and send a number with a two decimal point like *36.52*.";
+
+// Decide whether a message was an attempt to send a temperature, and whether
+// that attempt is valid. Date and cycle-day tokens are stripped first so
+// "36.52 d5" or "36.52 01/06" are not misread as bad numbers.
+export function checkTemperatureInput(text: string): { attempt: boolean; ok: boolean; value?: number } {
+  let t = ` ${text.trim()} `;
+  t = t.replace(/\b\d{4}-\d{1,2}-\d{1,2}\b/g, " ");
+  t = t.replace(/\b\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?\b/g, " ");
+  t = t.replace(/\b(?:d|day|cycle\s*day)\s*\d{1,3}\b/gi, " ");
+  t = t.replace(/\b\d{1,3}\s*days?\s*ago\b/gi, " ");
+
+  const m = t.match(/(\d{2,3}(?:[.,]\d+)?)\s*([cCfF])?\b/);
+  if (!m) return { attempt: false, ok: false };
+
+  const raw = m[1].replace(",", ".");
+  const decimals = raw.includes(".") ? raw.split(".")[1].length : 0;
+  const num = parseFloat(raw);
+  const unit = m[2]?.toLowerCase();
+
+  // Fahrenheit input: convert, then apply the same physical range.
+  if (unit === "f" || num > 80) {
+    const c = ((num - 32) * 5) / 9;
+    const rounded = Math.round(c * 100) / 100;
+    if (rounded < BBT_MIN_C || rounded > BBT_MAX_C) return { attempt: true, ok: false };
+    return { attempt: true, ok: true, value: rounded };
+  }
+
+  if (decimals !== 2) return { attempt: true, ok: false };
+  if (!isFinite(num) || num < BBT_MIN_C || num > BBT_MAX_C) return { attempt: true, ok: false };
+  return { attempt: true, ok: true, value: Math.round(num * 100) / 100 };
+}
+
+function isYes(t: string): boolean {
+  return /^\s*(1|yes|y|yep|yeah|yup|oui|yego|ego|sí|si|sim|ndabyemera)\b/i.test(t.trim());
+}
+function isNo(t: string): boolean {
+  return /^\s*(2|no|n|nope|nah|non|oya|nao|não)\b/i.test(t.trim());
 }
 
 // Parse a date out of free-text (no temperature required). Accepts ISO,
@@ -474,6 +536,9 @@ async function getLogsForCycleChart(userId: string, _cycleId: string, _cycleStar
     .from("temperature_logs")
     .select("logged_for, temp_celsius, cycle_id")
     .eq("user_id", userId)
+    // Days flagged as fever / illness / disrupted sleep are stored but must
+    // never influence the fertility algorithm or the chart curve.
+    .eq("excluded", false)
     .order("logged_for");
   if (error) {
     console.error("getLogsForCycleChart error", error);
@@ -487,12 +552,17 @@ export async function handleIncomingMessage(args: {
   waMessageId: string;
   text: string;
   raw: unknown;
+  /** When provided, replies are collected here instead of sent via WhatsApp. */
+  capture?: CapturedMessage[];
+  /** Pre-resolved profile (used by the in-app web chat). */
+  profileOverride?: any;
 }) {
-  const { from, waMessageId, text, raw } = args;
+  const { from, waMessageId, text, raw, capture, profileOverride } = args;
   const trimmed = text.trim();
   const lower = trimmed.toLowerCase();
 
-  let profile = await findUserByPhone(from);
+  let profile = profileOverride ?? (await findUserByPhone(from));
+  if (capture && profile) profile = { ...profile, __capture: capture };
   if (!profile) {
     const n = normalizePhone(from);
     const { data: userData, error: userErr } = await supabaseAdmin.auth.admin.createUser({
@@ -557,7 +627,9 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
       from,
       [
         "📋 Commands:",
-        "• Send a number (e.g. *36.7*) to log today's basal temperature",
+        "• Send a number with *two decimals* (e.g. *36.52*) to log today's basal temperature — valid range is *35.00–38.00°C*",
+        "• 🤒 If a reading is at or above normal body temperature I'll ask if you're sick — if you are, that day is excluded from calculations",
+        "• ☀️ Each morning I ask if you slept under 3 straight hours, woke up late, or drank alcohol — answer *1* (yes) and that day won't count",
         "• Add a date or day, e.g. *36.7 2026-06-01*, *36.7 01/06*, *36.7 yesterday*, or *36.7 d5*",
         "• *status* — current cycle day, fertile window, and chart",
         "• *chart* — send your cycle chart now",
@@ -790,8 +862,84 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
     return;
   }
 
-  // Onboarding: waiting for the user's last-period start date.
   const botState = readBotState(profile);
+
+  // --- Fever / illness confirmation -----------------------------------------
+  // Triggered when a submitted temperature was at or above normal body temp.
+  if (botState.awaiting_fever_check) {
+    const pendingTemp = typeof botState.pending_fever_temp === "number" ? botState.pending_fever_temp : null;
+    const pendingDate =
+      typeof botState.pending_fever_date === "string" ? botState.pending_fever_date : isoDate(new Date());
+    if (!isYes(trimmed) && !isNo(trimmed)) {
+      await reply(profile, from, "🤒 Quick check first — *do you have a high fever or feel sick?* Reply *YES* or *NO*.");
+      return;
+    }
+    const cleared = {
+      ...botState,
+      awaiting_fever_check: false,
+      pending_fever_temp: undefined,
+      pending_fever_date: undefined,
+    };
+    await supabaseAdmin.from("profiles").update({ bot_state: cleared }).eq("id", profile.id);
+    profile = { ...profile, bot_state: cleared };
+
+    if (pendingTemp === null) {
+      await reply(profile, from, "👍 Thanks. Send your temperature again when you're ready (e.g. *36.52*).");
+      return;
+    }
+    if (isYes(trimmed)) {
+      await saveExcludedLog(profile, pendingTemp, pendingDate, "fever-or-illness");
+      await reply(
+        profile,
+        from,
+        `🤒 Sorry you're unwell. I've saved *${pendingTemp.toFixed(2)}°C* for ${pendingDate} but *excluded it from your fertility calculations* — fever raises body temperature and would look like a false ovulation rise.\n\n💧 Rest, hydrate, and log again once you feel better. Your predictions stay based on your healthy days.`,
+      );
+      return;
+    }
+    // NO — not sick, but still an unusually high reading: keep it, flagged in the reply.
+    await handleTempLog(profile, from, pendingTemp, undefined, pendingDate, { skipFeverCheck: true });
+    return;
+  }
+
+  // --- Morning checklist (sleep / wake time / alcohol) -----------------------
+  if (botState.awaiting_morning_check) {
+    const checkDate = typeof botState.morning_check_on === "string" ? botState.morning_check_on : isoDate(new Date());
+    if (!isYes(trimmed) && !isNo(trimmed)) {
+      await reply(
+        profile,
+        from,
+        "☀️ Before your temperature — did *any* of these happen last night?\n• Slept less than 3 consecutive hours\n• Woke up much later than usual\n• Drank alcohol\n\nReply *1* = YES (any of them) · *2* = NO (none).",
+      );
+      return;
+    }
+    const yes = isYes(trimmed);
+    const next = {
+      ...botState,
+      awaiting_morning_check: false,
+      ignore_temp_on: yes ? checkDate : undefined,
+    };
+    await supabaseAdmin.from("profiles").update({ bot_state: next }).eq("id", profile.id);
+    profile = { ...profile, bot_state: next };
+    await reply(
+      profile,
+      from,
+      yes
+        ? "⚠️ Thanks for telling me. Disrupted sleep, a late wake-up, or alcohol all distort BBT, so *today's reading won't count toward your fertility calculations*. Send it anyway if you'd like — I'll store it as a note only.\n\n🌡️ Send your temperature like *36.52*."
+        : "✅ Great — a clean baseline. Send your temperature now, before getting out of bed (e.g. *36.52*).",
+    );
+    return;
+  }
+
+  // --- Temperature input validation -----------------------------------------
+  // Reject anything outside the physical BBT range or without two decimals,
+  // before it can reach the logging or onboarding flows.
+  const tempCheck = checkTemperatureInput(trimmed);
+  if (tempCheck.attempt && !tempCheck.ok) {
+    await reply(profile, from, TEMP_ERROR_MSG);
+    return;
+  }
+
+  // Onboarding: waiting for the user's last-period start date.
   if (botState.awaiting_period_start) {
     const pendingParsed = parseTempAndDay(trimmed);
     if (pendingParsed) {
@@ -973,7 +1121,7 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
     return;
   }
   if (smart?.intent === "history" || smart?.intent === "help") {
-    await handleIncomingMessage({ from, waMessageId: `${waMessageId}-${smart.intent}`, text: smart.intent, raw: {} });
+    await handleIncomingMessage({ from, waMessageId: `${waMessageId}-${smart.intent}`, text: smart.intent, raw: {}, capture, profileOverride: profile });
     return;
   }
   const answer = smart?.reply?.trim();
@@ -1107,9 +1255,42 @@ async function sendStatus(profile: any, from: string) {
   await replyImage(profile, from, await shortenChartUrl(chartUrl), caption);
 }
 
-async function handleTempLog(profile: any, from: string, temp: number, day?: number, dateIso?: string) {
+// Store a reading that must NOT feed the fertility algorithm (fever, illness,
+// broken sleep, alcohol). It stays visible as a note, flagged `excluded`.
+async function saveExcludedLog(profile: any, temp: number, loggedFor: string, reason: string) {
+  const { data: cycle } = await supabaseAdmin
+    .from("cycles")
+    .select("id")
+    .eq("user_id", profile.id)
+    .eq("status", "active")
+    .order("started_on", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  await supabaseAdmin.from("temperature_logs").upsert(
+    {
+      user_id: profile.id,
+      cycle_id: cycle?.id ?? null,
+      logged_for: loggedFor,
+      temp_celsius: temp,
+      source: "whatsapp",
+      excluded: true,
+      exclude_reason: reason,
+    },
+    { onConflict: "user_id,logged_for" },
+  );
+}
+
+async function handleTempLog(
+  profile: any,
+  from: string,
+  temp: number,
+  day?: number,
+  dateIso?: string,
+  opts?: { skipFeverCheck?: boolean },
+) {
   const today = isoDate(new Date());
   const cycle = await getOrCreateActiveCycle(profile.id, today);
+
 
   // Compute logged_for and (if needed) silently re-anchor the cycle start.
   //  - Temperature only → save today's log.
@@ -1175,7 +1356,42 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
     return;
   }
 
+  // --- Fever guard ------------------------------------------------------------
+  // A reading at or above normal body temperature is very likely illness, not
+  // ovulation. Ask before letting it move the prediction.
+  if (!opts?.skipFeverCheck && temp >= FEVER_C) {
+    const feverState = {
+      ...botStateNow,
+      awaiting_fever_check: true,
+      pending_fever_temp: temp,
+      pending_fever_date: loggedFor,
+    };
+    await supabaseAdmin.from("profiles").update({ bot_state: feverState }).eq("id", profile.id);
+    await reply(
+      { ...profile, bot_state: feverState },
+      from,
+      `🤒 *${temp.toFixed(2)}°C is at or above normal body temperature.*\n\n*Do you have a high fever or feel sick?* Reply *YES* or *NO*.\n\nIf you're unwell, I'll exclude this day from your fertility calculations so it doesn't look like a false ovulation rise.`,
+    );
+    return;
+  }
+
+  // --- Disrupted-morning guard -------------------------------------------------
+  // The user answered YES to the morning checklist (short sleep, late wake-up,
+  // or alcohol) for this date, so the reading is stored but not counted.
+  if (botStateNow.ignore_temp_on === loggedFor) {
+    await saveExcludedLog(profile, temp, loggedFor, "disrupted-morning");
+    const clearedState = { ...botStateNow, ignore_temp_on: undefined };
+    await supabaseAdmin.from("profiles").update({ bot_state: clearedState }).eq("id", profile.id);
+    await reply(
+      { ...profile, bot_state: clearedState },
+      from,
+      `📝 Saved *${temp.toFixed(2)}°C* for ${loggedFor} as a note only — *excluded from your fertility calculations* because of short sleep, a late wake-up, or alcohol last night.\n\n😴 Aim for 3+ uninterrupted hours of sleep and measure at your usual time tomorrow for a reading that counts.`,
+    );
+    return;
+  }
+
   const cycleStart = new Date(cycleStartIso);
+
 
   // Upsert log for that date
   const { error: upErr } = await supabaseAdmin
@@ -1187,6 +1403,8 @@ async function handleTempLog(profile: any, from: string, temp: number, day?: num
         logged_for: loggedFor,
         temp_celsius: temp,
         source: "whatsapp",
+        excluded: false,
+        exclude_reason: null,
       },
       { onConflict: "user_id,logged_for" },
     );
@@ -1301,7 +1519,18 @@ export async function sendDailyLogReminders(now = new Date()) {
 
     // If user is past their average cycle length, ask the bleeding question
     // instead of the usual log reminder.
-    let message = "⏰ Good morning — please log your BBT now, before getting out of bed. Send your temperature like *36.72*.";
+    let message = [
+      "⏰ Good morning — time to log your BBT, before getting out of bed.",
+      "",
+      "☝️ Quick check first — did *any* of these happen last night?",
+      "• Slept less than 3 consecutive hours",
+      "• Woke up much later than usual",
+      "• Drank alcohol",
+      "",
+      "Reply *1* = YES (any of them) · *2* = NO (none).",
+      "",
+      "Then send your temperature like *36.52*.",
+    ].join("\n");
     const { data: cycle } = await supabaseAdmin
       .from("cycles")
       .select("started_on")
@@ -1327,7 +1556,16 @@ export async function sendDailyLogReminders(now = new Date()) {
     await reply(profile, `+${profile.whatsapp_number}`, message);
     await supabaseAdmin
       .from("profiles")
-      .update({ bot_state: { ...state, timezone: timeZone, last_6am_reminder_on: local.date } })
+      .update({
+        bot_state: {
+          ...state,
+          timezone: timeZone,
+          last_6am_reminder_on: local.date,
+          awaiting_morning_check: true,
+          morning_check_on: local.date,
+          ignore_temp_on: undefined,
+        },
+      })
       .eq("id", profile.id);
   }
 }
