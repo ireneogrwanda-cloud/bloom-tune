@@ -627,7 +627,9 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
       from,
       [
         "📋 Commands:",
-        "• Send a number (e.g. *36.7*) to log today's basal temperature",
+        "• Send a number with *two decimals* (e.g. *36.52*) to log today's basal temperature — valid range is *35.00–38.00°C*",
+        "• 🤒 If a reading is at or above normal body temperature I'll ask if you're sick — if you are, that day is excluded from calculations",
+        "• ☀️ Each morning I ask if you slept under 3 straight hours, woke up late, or drank alcohol — answer *1* (yes) and that day won't count",
         "• Add a date or day, e.g. *36.7 2026-06-01*, *36.7 01/06*, *36.7 yesterday*, or *36.7 d5*",
         "• *status* — current cycle day, fertile window, and chart",
         "• *chart* — send your cycle chart now",
