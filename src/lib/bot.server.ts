@@ -1253,9 +1253,42 @@ async function sendStatus(profile: any, from: string) {
   await replyImage(profile, from, await shortenChartUrl(chartUrl), caption);
 }
 
-async function handleTempLog(profile: any, from: string, temp: number, day?: number, dateIso?: string) {
+// Store a reading that must NOT feed the fertility algorithm (fever, illness,
+// broken sleep, alcohol). It stays visible as a note, flagged `excluded`.
+async function saveExcludedLog(profile: any, temp: number, loggedFor: string, reason: string) {
+  const { data: cycle } = await supabaseAdmin
+    .from("cycles")
+    .select("id")
+    .eq("user_id", profile.id)
+    .eq("status", "active")
+    .order("started_on", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  await supabaseAdmin.from("temperature_logs").upsert(
+    {
+      user_id: profile.id,
+      cycle_id: cycle?.id ?? null,
+      logged_for: loggedFor,
+      temp_celsius: temp,
+      source: "whatsapp",
+      excluded: true,
+      exclude_reason: reason,
+    },
+    { onConflict: "user_id,logged_for" },
+  );
+}
+
+async function handleTempLog(
+  profile: any,
+  from: string,
+  temp: number,
+  day?: number,
+  dateIso?: string,
+  opts?: { skipFeverCheck?: boolean },
+) {
   const today = isoDate(new Date());
   const cycle = await getOrCreateActiveCycle(profile.id, today);
+
 
   // Compute logged_for and (if needed) silently re-anchor the cycle start.
   //  - Temperature only → save today's log.
