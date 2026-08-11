@@ -552,12 +552,17 @@ export async function handleIncomingMessage(args: {
   waMessageId: string;
   text: string;
   raw: unknown;
+  /** When provided, replies are collected here instead of sent via WhatsApp. */
+  capture?: CapturedMessage[];
+  /** Pre-resolved profile (used by the in-app web chat). */
+  profileOverride?: any;
 }) {
-  const { from, waMessageId, text, raw } = args;
+  const { from, waMessageId, text, raw, capture, profileOverride } = args;
   const trimmed = text.trim();
   const lower = trimmed.toLowerCase();
 
-  let profile = await findUserByPhone(from);
+  let profile = profileOverride ?? (await findUserByPhone(from));
+  if (capture && profile) profile = { ...profile, __capture: capture };
   if (!profile) {
     const n = normalizePhone(from);
     const { data: userData, error: userErr } = await supabaseAdmin.auth.admin.createUser({
