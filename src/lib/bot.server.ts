@@ -1401,6 +1401,8 @@ async function handleTempLog(
         logged_for: loggedFor,
         temp_celsius: temp,
         source: "whatsapp",
+        excluded: false,
+        exclude_reason: null,
       },
       { onConflict: "user_id,logged_for" },
     );
