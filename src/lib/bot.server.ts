@@ -1043,7 +1043,7 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
     return;
   }
   if (smart?.intent === "history" || smart?.intent === "help") {
-    await handleIncomingMessage({ from, waMessageId: `${waMessageId}-${smart.intent}`, text: smart.intent, raw: {} });
+    await handleIncomingMessage({ from, waMessageId: `${waMessageId}-${smart.intent}`, text: smart.intent, raw: {}, capture, profileOverride: profile });
     return;
   }
   const answer = smart?.reply?.trim();
