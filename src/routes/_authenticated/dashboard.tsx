@@ -298,6 +298,42 @@ function Dashboard() {
         </div>
       </div>
 
+      {/* Monthly summary — simple at-a-glance stats for the current cycle */}
+      {(() => {
+        const usable = data.activeLogs.filter((l: any) => !l.excluded);
+        const totalLoggedDays = usable.length;
+        const avgTemp =
+          totalLoggedDays > 0
+            ? (usable.reduce((s: number, l: any) => s + Number(l.temp_celsius), 0) / totalLoggedDays).toFixed(2)
+            : "—";
+        const mostFertileDay = stats
+          ? stats.ovulationConfirmed
+            ? `Day ${stats.estimatedOvulationDay}`
+            : stats.ovulationDayMin === stats.ovulationDayMax
+              ? `~Day ${stats.estimatedOvulationDay}`
+              : `Days ${stats.ovulationDayMin}–${stats.ovulationDayMax}`
+          : "—";
+        return (
+          <section className="rounded-2xl border bg-card p-5">
+            <h2 className="mb-3 font-semibold">Monthly summary</h2>
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="rounded-xl bg-muted/40 px-3 py-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Avg. temperature</p>
+                <p className="mt-1 text-xl font-bold">{avgTemp}{avgTemp !== "—" ? "°C" : ""}</p>
+              </div>
+              <div className="rounded-xl bg-muted/40 px-3 py-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Most fertile day</p>
+                <p className="mt-1 text-xl font-bold">{mostFertileDay}</p>
+              </div>
+              <div className="rounded-xl bg-muted/40 px-3 py-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Days logged</p>
+                <p className="mt-1 text-xl font-bold">{totalLoggedDays}</p>
+              </div>
+            </div>
+          </section>
+        );
+      })()}
+
       <section>
         <h2 className="font-semibold mb-2">Past cycles</h2>
         <div className="rounded-2xl border bg-card divide-y">
