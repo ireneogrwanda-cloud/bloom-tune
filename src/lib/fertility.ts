@@ -55,34 +55,110 @@ function stddev(xs: number[]): number {
   return Math.sqrt(v);
 }
 
-// 3-over-6 BBT rule with coverline + minimum-rise threshold.
-//
-// Coverline = max(baseline). We require each of the next 3 readings to sit
-// strictly above the coverline AND at least one of them to clear it by
-// MIN_RISE_C, so a noise-level drift (e.g. +0.01°C) cannot falsely confirm
-// ovulation. Matches standard FAM teaching (Sensiplan / Justisse use a
-// ~0.2°C clearing rule on the 3rd elevated day).
-//
-// Excludes points inside the menstrual phase — bleeding-day temps are noisy
-// and would otherwise lower the baseline artificially.
+// Minimum sustained rise a high-phase reading must clear above the coverline
+// to count as a real ovulation shift (Sensiplan / Justisse ~0.2°C rule).
 export const MIN_RISE_C = 0.2;
 
+// How many calendar days the "3 elevated readings" run may span before we
+// stop treating it as one sustained shift. Set to 5 so up to 2 missed logs
+// between the first and third elevated reading don't invalidate detection.
+const GAP_TOLERANCE_DAYS = 5;
+
+function median(xs: number[]): number {
+  if (xs.length === 0) return 0;
+  const s = [...xs].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+// Robust, gap-tolerant 3-over-6 BBT ovulation detection.
+//
+// Classic Sensiplan takes the highest of the 6 low (follicular) temps as the
+// coverline, then requires the next 3 *consecutive* readings above it. That
+// "consecutive" rule is by array index, so a single missed day shifts which
+// temps form the baseline and a noisy/fever temp inside the baseline window
+// inflates the coverline and silently blocks detection.
+//
+// Here we derive the coverline from the low-temperature cluster via a median
+// pivot — robust to outliers and to sparse logging — then look for a run of
+// 3 elevated readings whose calendar span is ≤ GAP_TOLERANCE_DAYS (so missed
+// days between them don't break it). At least one of the three must clear the
+// coverline by MIN_RISE_C. Ovulation day = the day before the first elevated
+// reading (the last low day).
+//
+// Menstrual-phase temps (day ≤ periodLength) are excluded — they're noisy and
+// would otherwise lower the baseline artificially.
 export function detectOvulation(points: TempPoint[], periodLength = 0): number | null {
   const eligible = points.filter((p) => p.day > periodLength);
-  if (eligible.length < 6) return null;
+  if (eligible.length < 5) return null;
   const sorted = [...eligible].sort((a, b) => a.day - b.day);
-  for (let i = 3; i <= sorted.length - 3; i++) {
-    const baseline = sorted.slice(Math.max(0, i - 6), i);
-    if (baseline.length < 3) continue;
-    const rise = sorted.slice(i, i + 3);
-    const coverline = Math.max(...baseline.map((p) => p.temp));
-    const allAbove = rise.every((p) => p.temp > coverline);
-    const clearsMinRise = rise.some((p) => p.temp >= coverline + MIN_RISE_C);
-    if (allAbove && clearsMinRise) {
-      return sorted[i].day - 1;
-    }
+
+  const med = median(sorted.map((p) => p.temp));
+  const low = sorted.filter((p) => p.temp <= med + 0.05);
+  if (low.length < 3) return null;
+  const coverline = Math.max(...low.map((p) => p.temp));
+
+  const elevated = sorted.filter((p) => p.temp > coverline);
+  if (elevated.length < 3) return null;
+
+  for (let i = 0; i <= elevated.length - 3; i++) {
+    const a = elevated[i];
+    const b = elevated[i + 1];
+    const c = elevated[i + 2];
+    // Tolerate up to 2 missed logs between the first and third elevated day.
+    if (c.day - a.day > GAP_TOLERANCE_DAYS) continue;
+    const clearsMinRise = [a, b, c].some((p) => p.temp >= coverline + MIN_RISE_C);
+    if (clearsMinRise) return a.day - 1;
   }
   return null;
+}
+
+export type LutealPhase = {
+  confirmed: boolean;
+  /** Best estimate of ovulation day (null if undetermined). */
+  ovulationDay: number | null;
+  /** Highest follicular temperature — the shift reference line. */
+  coverline: number | null;
+  /** First day of the sustained high-phase run. */
+  lutealStartDay: number | null;
+};
+
+// Confirm the luteal phase even when logs are sparse / some days are missed.
+//
+// detectOvulation pins the exact ovulation day but needs a tight 3-elevated
+// run. confirmLutealPhase is looser: it only needs a clear mean shift between
+// the low and high clusters, ≥3 high readings total (any spacing), and the
+// most recent logged temp still elevated. That's enough to tell the user the
+// fertile window has closed when BBT confirms it — without demanding a
+// perfectly consecutive record.
+export function confirmLutealPhase(points: TempPoint[], periodLength = 0): LutealPhase {
+  const empty: LutealPhase = { confirmed: false, ovulationDay: null, coverline: null, lutealStartDay: null };
+  const eligible = points.filter((p) => p.day > periodLength);
+  if (eligible.length < 4) return empty;
+  const sorted = [...eligible].sort((a, b) => a.day - b.day);
+
+  const med = median(sorted.map((p) => p.temp));
+  const low = sorted.filter((p) => p.temp <= med + 0.05);
+  const high = sorted.filter((p) => p.temp > med + 0.05);
+  if (low.length < 2 || high.length < 3) return empty;
+
+  const coverline = Math.max(...low.map((p) => p.temp));
+  const lowMean = mean(low.map((p) => p.temp));
+  const highMean = mean(high.map((p) => p.temp));
+  if (highMean - lowMean < MIN_RISE_C * 0.5) return empty;
+
+  // The most recent reading must still be elevated — otherwise a recent dip
+  // below the coverline means we're not reliably in the luteal phase right now.
+  const last = sorted[sorted.length - 1];
+  if (last.temp <= coverline) return empty;
+
+  const firstHigh = sorted.find((p) => p.temp > coverline);
+  return {
+    confirmed: true,
+    ovulationDay: firstHigh ? firstHigh.day - 1 : null,
+    coverline,
+    lutealStartDay: firstHigh ? firstHigh.day : null,
+  };
 }
 
 export function predictCycle(args: {
@@ -108,12 +184,16 @@ export function predictCycle(args: {
   // around the calendar ovulation day).
   const calendarOv = predictedCycleLength - 14;
   const detectedOv = detectOvulation(temps, periodLength);
+  // Looser, gap-tolerant confirmation: even if we can't pin the exact ovulation
+  // day (missing logs break the tight 3-over-6 run), we may still be able to
+  // confirm the luteal phase has begun from a sustained mean shift.
+  const luteal = confirmLutealPhase(temps, periodLength);
 
   // If BBT hasn't confirmed ovulation but we have temps past the calendar
   // ovulation day that are still at baseline, ovulation likely hasn't happened
   // yet — push the estimate forward so the fertile window stays open.
   let calendarOvAdjusted = calendarOv;
-  if (detectedOv === null && temps.length >= 3) {
+  if (detectedOv === null && !luteal.confirmed && temps.length >= 3) {
     const sorted = [...temps].sort((a, b) => a.day - b.day);
     const lastDay = sorted[sorted.length - 1].day;
     const baselinePool = sorted.filter((p) => p.day > periodLength && p.day < calendarOv);
@@ -130,12 +210,13 @@ export function predictCycle(args: {
     }
   }
 
-  const ovulationDay = detectedOv ?? calendarOvAdjusted;
+  const ovulationDay =
+    detectedOv ?? (luteal.confirmed ? (luteal.ovulationDay ?? calendarOvAdjusted) : calendarOvAdjusted);
 
   // ---- 3. Confidence ---------------------------------------------------------
   let confidence: CycleStats["confidence"];
   if (detectedOv !== null) confidence = "high";
-  else if (validHistory.length >= 3) confidence = "medium";
+  else if (luteal.confirmed || validHistory.length >= 3) confidence = "medium";
   else confidence = "low";
 
   // ---- 4. Fertile window with variability buffer -----------------------------
@@ -146,9 +227,11 @@ export function predictCycle(args: {
   const fertileEndDay = ovulationDay + 1 + buffer;
 
   // Fertile window is "closed" (safe to say no protection needed) ONLY when
-  // BBT has confirmed ovulation via the 3-over-6 rule AND we are clearly past
-  // the post-ovulation buffer. A single high reading is NOT enough.
-  const fertileWindowClosed = detectedOv !== null && cycleDay > fertileEndDay;
+  // BBT has confirmed ovulation — either via the tight 3-over-6 rule OR the
+  // gap-tolerant luteal-phase confirmation — AND we are clearly past the
+  // post-ovulation buffer. A single high reading is NOT enough.
+  const ovulationConfirmed = detectedOv !== null || luteal.confirmed;
+  const fertileWindowClosed = ovulationConfirmed && cycleDay > fertileEndDay;
 
   // ---- 5. Status + human-readable message -----------------------------------
   let status: CycleStats["status"] = "unknown";
@@ -178,16 +261,17 @@ export function predictCycle(args: {
   } else if (cycleDay <= predictedCycleLength) {
     status = "post-ovulation";
     message = fertileWindowClosed
-      ? `Day ${cycleDay}. Luteal phase confirmed — temperature has stayed elevated for 3+ days. Fertility is low. Next period expected around day ${predictedCycleLength + 1}.`
-      : `Day ${cycleDay}. Likely post-ovulation, but not yet confirmed — fertility awareness methods need 3 consecutive elevated temperatures above the prior baseline before declaring the fertile window closed. Stay cautious.`;
+      ? `Day ${cycleDay}. Luteal phase confirmed — your temperatures have stayed elevated above your pre-ovulation baseline (a few missed logs don't change this). Fertility is low. Next period expected around day ${predictedCycleLength + 1}.`
+      : `Day ${cycleDay}. Likely post-ovulation, but not yet confirmed — fertility awareness methods need 3 elevated temperatures above your prior baseline (a couple of missed days are okay) before declaring the fertile window closed. Stay cautious.`;
   } else {
     status = "post-ovulation";
     message = `Day ${cycleDay}. Cycle is running longer than the ${predictedCycleLength}-day average; period may start any day.`;
   }
 
-  // Ovulation range: collapses to single day when BBT-confirmed; otherwise
-  // spreads with cycle-length variability (±ceil(sd), min ±1).
-  const ovSpread = detectedOv !== null ? 0 : Math.max(1, Math.ceil(sd));
+  // Ovulation range: collapses to single day when BBT pins the exact day;
+  // spreads with cycle-length variability otherwise. A gap-tolerant luteal
+  // confirmation gives medium confidence (±1) rather than a tight point.
+  const ovSpread = detectedOv !== null ? 0 : luteal.confirmed ? 1 : Math.max(1, Math.ceil(sd));
   const ovulationDayMin = Math.max(1, ovulationDay - ovSpread);
   const ovulationDayMax = ovulationDay + ovSpread;
 
@@ -199,7 +283,7 @@ export function predictCycle(args: {
     fertileStartDay,
     fertileEndDay,
     status,
-    ovulationConfirmed: detectedOv !== null,
+    ovulationConfirmed,
     fertileWindowClosed,
     confidence,
     cyclesAnalyzed: validHistory.length,
