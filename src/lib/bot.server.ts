@@ -237,10 +237,20 @@ async function logOutbound(userId: string | null, body: string) {
 
 const HELP_HINT = "\n\n💬 Type *help* anytime for more.";
 
+// When the bot runs behind the in-app web chat instead of WhatsApp, replies are
+// captured into this array (attached to the profile) instead of being sent
+// through Twilio.
+export type CapturedMessage = { text?: string; imageUrl?: string };
+function captureOf(profile: any): CapturedMessage[] | null {
+  return Array.isArray(profile?.__capture) ? (profile.__capture as CapturedMessage[]) : null;
+}
+
 async function reply(profile: any, to: string, body: string, opts?: { hint?: boolean }) {
   const withHint = opts?.hint === false ? body : body + HELP_HINT;
   const translated = await translate(withHint, userLang(profile, to));
-  await sendWhatsAppText(to, translated);
+  const cap = captureOf(profile);
+  if (cap) cap.push({ text: translated });
+  else await sendWhatsAppText(to, translated);
   await logOutbound(profile?.id ?? null, translated);
 }
 
@@ -249,7 +259,9 @@ async function replyImage(profile: any, to: string, imageUrl: string, caption?: 
     ? (opts?.hint === false ? caption : caption + HELP_HINT)
     : undefined;
   const cap = finalCaption ? await translate(finalCaption, userLang(profile, to)) : undefined;
-  await sendWhatsAppImage(to, imageUrl, cap);
+  const sink = captureOf(profile);
+  if (sink) sink.push({ text: cap, imageUrl });
+  else await sendWhatsAppImage(to, imageUrl, cap);
   if (cap) await logOutbound(profile?.id ?? null, `[chart] ${cap}`);
 }
 
