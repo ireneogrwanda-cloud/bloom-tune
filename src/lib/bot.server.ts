@@ -1517,7 +1517,18 @@ export async function sendDailyLogReminders(now = new Date()) {
 
     // If user is past their average cycle length, ask the bleeding question
     // instead of the usual log reminder.
-    let message = "⏰ Good morning — please log your BBT now, before getting out of bed. Send your temperature like *36.72*.";
+    let message = [
+      "⏰ Good morning — time to log your BBT, before getting out of bed.",
+      "",
+      "☝️ Quick check first — did *any* of these happen last night?",
+      "• Slept less than 3 consecutive hours",
+      "• Woke up much later than usual",
+      "• Drank alcohol",
+      "",
+      "Reply *1* = YES (any of them) · *2* = NO (none).",
+      "",
+      "Then send your temperature like *36.52*.",
+    ].join("\n");
     const { data: cycle } = await supabaseAdmin
       .from("cycles")
       .select("started_on")
@@ -1543,7 +1554,16 @@ export async function sendDailyLogReminders(now = new Date()) {
     await reply(profile, `+${profile.whatsapp_number}`, message);
     await supabaseAdmin
       .from("profiles")
-      .update({ bot_state: { ...state, timezone: timeZone, last_6am_reminder_on: local.date } })
+      .update({
+        bot_state: {
+          ...state,
+          timezone: timeZone,
+          last_6am_reminder_on: local.date,
+          awaiting_morning_check: true,
+          morning_check_on: local.date,
+          ignore_temp_on: undefined,
+        },
+      })
       .eq("id", profile.id);
   }
 }
