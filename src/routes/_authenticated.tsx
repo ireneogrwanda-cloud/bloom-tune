@@ -35,6 +35,7 @@ function AuthLayout() {
           </Link>
           <nav className="flex items-center gap-1">
             <Button asChild variant="ghost" size="sm"><Link to="/dashboard">Dashboard</Link></Button>
+            <Button asChild variant="ghost" size="sm"><Link to="/how-it-works">How it works</Link></Button>
             <Button asChild variant="ghost" size="sm"><Link to="/settings">Settings</Link></Button>
             <Button variant="ghost" size="sm" onClick={signOut}>Sign out</Button>
           </nav>
