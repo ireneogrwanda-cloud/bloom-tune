@@ -1374,7 +1374,7 @@ Rules:
 - When an update intent is set, leave "reply" null.
 - Otherwise write a short, warm "reply" (max 3 short sentences) in the fertility/BBT context. Use *asterisks* for bold. Never invent medical advice.
 - Always end "reply" with a friendly nudge like: "Type *help* anytime for more."
-- Reply language: ${lang}. Write "reply" natively in that language.`;
+- Write "reply" in ENGLISH. The bot translates it into the user's language (${lang}) before sending, so do not translate it yourself.`;
 
   try {
     const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
