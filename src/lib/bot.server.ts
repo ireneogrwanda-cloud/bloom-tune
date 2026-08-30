@@ -928,17 +928,21 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
         pointRadius: 3,
       };
     });
+    const [histTitle, histY, histX] = await translateMany(
+      [`BBT history — ${spanMonthsTxt}`, "°C", "Date"],
+      userLang(profile, from),
+    );
     const cfg = {
       type: "line",
       data: { datasets },
       options: {
         plugins: {
-          title: { display: true, text: `BBT history — ${spanMonthsTxt}` },
+          title: { display: true, text: histTitle },
           legend: { display: true, position: "bottom" },
         },
         scales: {
-          y: { min: 35.5, max: 37.5, title: { display: true, text: "°C" } },
-          x: { type: "time", time: { unit: "day", tooltipFormat: "yyyy-MM-dd" }, title: { display: true, text: "Date" } },
+          y: { min: 35.5, max: 37.5, title: { display: true, text: histY } },
+          x: { type: "time", time: { unit: "day", tooltipFormat: "yyyy-MM-dd" }, title: { display: true, text: histX } },
         },
       },
     };
