@@ -1103,8 +1103,27 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
     return;
   }
 
-  // Fallback: use AI to understand intent and reply helpfully, or dispatch a known command.
+  // Fallback: use AI to understand intent and either APPLY the change the user
+  // described (period start, cycle day, temperature, cycle/period length) or
+  // dispatch a known command / answer conversationally.
   const smart = await interpretUnknown(trimmed, profile, from);
+
+  if (smart?.intent === "set_period_start" && smart.date) {
+    await applyPeriodStart(profile, from, smart.date);
+    return;
+  }
+  if (smart?.intent === "set_cycle_day" && typeof smart.day === "number") {
+    await applyCycleDay(profile, from, smart.day);
+    return;
+  }
+  if (smart?.intent === "log_temp" && typeof smart.temp === "number") {
+    await handleTempLog(profile, from, smart.temp, smart.day, smart.date);
+    return;
+  }
+  if (smart?.intent === "set_lengths" && (smart.avgCycleLength || smart.periodLength)) {
+    await applyLengths(profile, from, smart.avgCycleLength, smart.periodLength);
+    return;
+  }
   if (smart?.intent === "status" || smart?.intent === "chart") {
     await sendStatus(profile, from);
     return;
@@ -1122,6 +1141,71 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
       : `I want to help but I'm not sure what you meant. You can send a temperature like *36.7*, ask about your cycle, or type *help* to see everything I can do.`,
   );
 }
+
+// --- Direct updates the bot can apply from natural language -----------------
+
+async function applyPeriodStart(profile: any, from: string, newStart: string) {
+  const { data: activeCycle } = await supabaseAdmin
+    .from("cycles")
+    .select("id, started_on")
+    .eq("user_id", profile.id)
+    .eq("status", "active")
+    .order("started_on", { ascending: false })
+    .maybeSingle();
+  if (activeCycle) {
+    await supabaseAdmin
+      .from("cycles")
+      .update({ started_on: newStart, ended_on: null, status: "active" })
+      .eq("id", activeCycle.id);
+  } else {
+    await supabaseAdmin.from("cycles").insert({ user_id: profile.id, started_on: newStart, status: "active" });
+  }
+  const state = readBotState(profile);
+  if (state.awaiting_period_start) {
+    const next = { ...state, awaiting_period_start: false };
+    await supabaseAdmin.from("profiles").update({ bot_state: next }).eq("id", profile.id);
+    profile = { ...profile, bot_state: next };
+  }
+  await reply(
+    profile,
+    from,
+    `✅ Got it — your current period started on *${newStart}*. I've re-aligned your cycle and predictions from that date.`,
+  );
+  await sendStatus(profile, from);
+}
+
+async function applyCycleDay(profile: any, from: string, day: number) {
+  const d = Math.round(day);
+  if (!Number.isFinite(d) || d < 1 || d > 60) {
+    await reply(profile, from, "🤔 That cycle day looks off. Tell me something like *I'm on day 12* (1–60).");
+    return;
+  }
+  const anchor = new Date();
+  anchor.setDate(anchor.getDate() - (d - 1));
+  const started = isoDate(anchor);
+  await applyPeriodStart(profile, from, started);
+}
+
+async function applyLengths(profile: any, from: string, avgCycleLength?: number, periodLength?: number) {
+  const update: Record<string, number> = {};
+  if (typeof avgCycleLength === "number" && avgCycleLength >= 20 && avgCycleLength <= 45) {
+    update.avg_cycle_length = Math.round(avgCycleLength);
+  }
+  if (typeof periodLength === "number" && periodLength >= 2 && periodLength <= 10) {
+    update.period_length = Math.round(periodLength);
+  }
+  if (Object.keys(update).length === 0) {
+    await reply(profile, from, "🤔 Cycle length should be 20–45 days and period length 2–10 days. Try again with a number in that range.");
+    return;
+  }
+  await supabaseAdmin.from("profiles").update(update).eq("id", profile.id);
+  profile = { ...profile, ...update };
+  const parts: string[] = [];
+  if (update.avg_cycle_length) parts.push(`average cycle *${update.avg_cycle_length} days*`);
+  if (update.period_length) parts.push(`period length *${update.period_length} days*`);
+  await reply(profile, from, `✅ Updated — ${parts.join(" and ")}. Predictions will use this from now on.`);
+}
+
 
 // Ask the AI gateway to classify an unrecognized message. Returns an intent
 // (to dispatch a known command) or a warm, on-topic reply that answers the
