@@ -1293,12 +1293,6 @@ Rules:
   }
 }
 
-  } catch (e) {
-    console.error("interpretUnknown failed", e);
-    return null;
-  }
-}
-
 async function sendStatus(profile: any, from: string) {
   const cycle = await getOrCreateActiveCycle(profile.id, isoDate(new Date()));
   const logs = await getLogsForCycleChart(profile.id, cycle.id, cycle.started_on);
