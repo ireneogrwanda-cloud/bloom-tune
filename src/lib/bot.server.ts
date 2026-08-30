@@ -632,8 +632,14 @@ export async function handleIncomingMessage(args: {
   profileOverride?: any;
 }) {
   const { from, waMessageId, text, raw, capture, profileOverride } = args;
-  const trimmed = text.trim();
+  const original = text.trim();
+  // Understand messages written in any language: translate to English for the
+  // parsers below, and remember which language the user writes in so replies
+  // come back in that same language.
+  const normalized = await normalizeInbound(original, from);
+  const trimmed = normalized.text.trim();
   const lower = trimmed.toLowerCase();
+  const detectedLanguage = normalized.language;
 
   let profile = profileOverride ?? (await findUserByPhone(from));
   if (capture && profile) profile = { ...profile, __capture: capture };
