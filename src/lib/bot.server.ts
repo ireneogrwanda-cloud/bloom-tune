@@ -470,13 +470,30 @@ function parseDateOnly(text: string): string | null {
 
 // Build a public chart image URL using QuickChart (Chart.js renderer).
 // Green = infertile days, Red = fertile window, dashed line = ovulation.
+export type ChartLabels = { title: string; xAxis: string; yAxis: string };
+
+// Translate the handful of words that appear inside the chart image so the
+// picture matches the language of the message it ships with.
+async function chartLabels(profile: any, phone: string, cycleDay: number, avgCycleLength: number): Promise<ChartLabels> {
+  const base: ChartLabels = {
+    title: `Cycle overview — day ${cycleDay} of ~${avgCycleLength}`,
+    xAxis: "Cycle day",
+    yAxis: "°C",
+  };
+  const lang = userLang(profile, phone);
+  if (lang === "English") return base;
+  const [title, xAxis, yAxis] = await translateMany([base.title, base.xAxis, base.yAxis], lang);
+  return { title, xAxis, yAxis };
+}
+
 function buildChartUrl(args: {
   avgCycleLength: number;
   periodLength: number;
   temps: TempPoint[];
   stats: CycleStats;
+  labels?: ChartLabels;
 }): string {
-  const { avgCycleLength, periodLength, temps, stats } = args;
+  const { avgCycleLength, periodLength, temps, stats, labels } = args;
   const maxTempDay = temps.reduce((m, p) => Math.max(m, p.day), 1);
   const minDay = 1;
   const maxDay = Math.max(avgCycleLength, stats.cycleDay, stats.fertileEndDay + 2, maxTempDay, 28);
