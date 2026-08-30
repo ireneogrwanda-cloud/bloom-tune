@@ -691,11 +691,31 @@ export async function handleIncomingMessage(args: {
 Reply with a date — e.g. *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days ago*.
 
 Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type *help* anytime.`;
-    await sendWhatsAppText(from, await translate(welcome, detectLanguage(from)));
-    await logInbound(profile.id, from, waMessageId, trimmed, raw);
+    const welcomeLang = detectedLanguage ?? detectLanguage(from);
+    if (detectedLanguage) {
+      const st = { ...initialState, detected_language: detectedLanguage };
+      await supabaseAdmin.from("profiles").update({ bot_state: st }).eq("id", profile.id);
+      profile.bot_state = st;
+    }
+    const outbound = await translate(welcome, welcomeLang);
+    if (capture) capture.push({ text: outbound });
+    else await sendWhatsAppText(from, outbound);
+    await logOutbound(profile.id, outbound);
+    await logInbound(profile.id, from, waMessageId, original, raw);
     return;
   }
-  await logInbound(profile.id, from, waMessageId, trimmed, raw);
+  await logInbound(profile.id, from, waMessageId, original, raw);
+
+  // Remember the language the user writes in (unless they set an explicit
+  // `lang` override), so every future reply matches it.
+  if (detectedLanguage) {
+    const st = readBotState(profile);
+    if (!st.language && st.detected_language !== detectedLanguage) {
+      const next = { ...st, detected_language: detectedLanguage };
+      await supabaseAdmin.from("profiles").update({ bot_state: next }).eq("id", profile.id);
+      profile = { ...profile, bot_state: next };
+    }
+  }
 
 
 
