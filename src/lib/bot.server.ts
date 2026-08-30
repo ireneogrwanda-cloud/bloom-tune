@@ -75,11 +75,15 @@ function detectLanguage(phone: string): string {
   return "English";
 }
 
-// Resolve a user's preferred language: explicit override in bot_state wins,
-// otherwise fall back to phone-based detection.
+// Resolve a user's preferred language. Priority:
+//   1. explicit `lang <x>` override stored in bot_state
+//   2. the language the user actually writes in (auto-detected from messages)
+//   3. phone country-code guess
 function userLang(profile: any, phone: string): string {
   const override = profile?.bot_state?.language;
   if (typeof override === "string" && override.trim()) return override;
+  const detected = profile?.bot_state?.detected_language;
+  if (typeof detected === "string" && detected.trim()) return detected;
   return detectLanguage(phone);
 }
 
