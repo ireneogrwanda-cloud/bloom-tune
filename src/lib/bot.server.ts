@@ -1479,6 +1479,7 @@ async function sendStatus(profile: any, from: string) {
     periodLength: profile.period_length,
     temps,
     stats,
+    labels: await chartLabels(profile, from, stats.cycleDay, stats.predictedCycleLength),
   });
   await replyImage(profile, from, await shortenChartUrl(chartUrl), caption);
 }
