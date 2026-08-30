@@ -554,18 +554,26 @@ function buildChartUrl(args: {
     },
     options: {
       plugins: {
-        title: { display: true, text: `Cycle overview — day ${stats.cycleDay} of ~${avgCycleLength}` },
+        title: {
+          display: true,
+          text: labels?.title ?? `Cycle overview — day ${stats.cycleDay} of ~${avgCycleLength}`,
+        },
         legend: { display: false },
         annotation: { annotations },
       },
 
       scales: {
-        y: { min: 35.5, max: 37.5, title: { display: true, text: "°C" }, grid: { color: "rgba(15,23,42,0.06)" } },
+        y: {
+          min: 35.5,
+          max: 37.5,
+          title: { display: true, text: labels?.yAxis ?? "°C" },
+          grid: { color: "rgba(15,23,42,0.06)" },
+        },
         x: {
           type: "linear",
           min: minDay,
           max: maxDay,
-          title: { display: true, text: "Cycle day" },
+          title: { display: true, text: labels?.xAxis ?? "Cycle day" },
           ticks: { stepSize: 1, autoSkip: false, precision: 0 },
           grid: { color: "rgba(15,23,42,0.08)" },
         },
