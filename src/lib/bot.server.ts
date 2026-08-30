@@ -677,7 +677,7 @@ export async function handleIncomingMessage(args: {
     });
     if (userErr || !userData?.user) {
       console.error("auto-create auth user failed", userErr);
-      await sendWhatsAppText(from, await translate("Sorry, something went wrong setting up your account. Please try again.", detectLanguage(from)));
+      await sendWhatsAppText(from, await translate("Sorry, something went wrong setting up your account. Please try again.", detectedLanguage ?? detectLanguage(from)));
       return;
     }
     const { data: updated, error: updErr } = await supabaseAdmin
@@ -688,7 +688,7 @@ export async function handleIncomingMessage(args: {
       .single();
     if (updErr || !updated) {
       console.error("auto-create profile update failed", updErr);
-      await sendWhatsAppText(from, await translate("Sorry, something went wrong setting up your account. Please try again.", detectLanguage(from)));
+      await sendWhatsAppText(from, await translate("Sorry, something went wrong setting up your account. Please try again.", detectedLanguage ?? detectLanguage(from)));
       return;
     }
     profile = updated;
