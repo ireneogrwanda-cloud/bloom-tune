@@ -75,11 +75,15 @@ function detectLanguage(phone: string): string {
   return "English";
 }
 
-// Resolve a user's preferred language: explicit override in bot_state wins,
-// otherwise fall back to phone-based detection.
+// Resolve a user's preferred language. Priority:
+//   1. explicit `lang <x>` override stored in bot_state
+//   2. the language the user actually writes in (auto-detected from messages)
+//   3. phone country-code guess
 function userLang(profile: any, phone: string): string {
   const override = profile?.bot_state?.language;
   if (typeof override === "string" && override.trim()) return override;
+  const detected = profile?.bot_state?.detected_language;
+  if (typeof detected === "string" && detected.trim()) return detected;
   return detectLanguage(phone);
 }
 
@@ -197,6 +201,76 @@ async function translate(text: string, lang: string): Promise<string> {
     return data?.choices?.[0]?.message?.content?.trim() || text;
   } catch {
     return text;
+  }
+}
+
+// Translate a batch of short UI strings (chart titles, axis labels) in one call.
+async function translateMany(items: string[], lang: string): Promise<string[]> {
+  if (lang === "English" || items.length === 0) return items;
+  const joined = items.join("\n@@\n");
+  const out = await translate(joined, lang);
+  const parts = out.split(/\s*@@\s*/).map((s) => s.trim());
+  return parts.length === items.length ? parts : items;
+}
+
+// Does the message already look like something the English parsers handle?
+// (numbers, dates, known commands, yes/no) — if so we skip the AI round-trip.
+const ENGLISH_COMMAND_RE =
+  /^\/?(help|status|chart|history|cycles|period|periods|reset\s+cycle|lang(uage)?\b.*|bleeding\s+started.*|period\s+started.*|menstruation\s+started.*)$/i;
+
+function looksAlreadyParseable(text: string): boolean {
+  const t = text.trim();
+  if (!t) return true;
+  if (/[^\u0000-\u007F]/.test(t)) return false; // any non-ASCII → let the AI look at it
+  if (ENGLISH_COMMAND_RE.test(t)) return true;
+  if (/^\d{1,2}([.,]\d{1,2})?(\s*(°?c)?)?(\s+.*)?$/i.test(t)) return true; // temperature (+ optional day/date)
+  if (isYes(t) || isNo(t)) return true;
+  return false;
+}
+
+// Understand a message written in ANY language: detect the language the user
+// writes in and produce an English version the rest of the parsers can read.
+// Falls back to the original text whenever the AI is unavailable.
+async function normalizeInbound(
+  text: string,
+  phone: string,
+): Promise<{ text: string; language: string | null }> {
+  if (looksAlreadyParseable(text)) return { text, language: null };
+  const key = process.env.LOVABLE_API_KEY;
+  if (!key) return { text, language: null };
+  try {
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          {
+            role: "system",
+            content: `You normalize incoming WhatsApp messages for a fertility-tracking bot.
+Detect the language the message is written in (English name, e.g. "Kinyarwanda", "French", "Swahili", "Spanish"). If the language is genuinely ambiguous (only digits, emoji, or a name), return null for language.
+Then translate the message faithfully into English, keeping every number, date, and cycle-day reference intact. Do not answer the message, do not add anything.
+Return STRICT JSON only: {"language": string|null, "english": string}`,
+          },
+          { role: "user", content: text },
+        ],
+      }),
+    });
+    if (!res.ok) return { text, language: null };
+    const data = await res.json();
+    const raw: string = data?.choices?.[0]?.message?.content ?? "";
+    const jsonStr = raw.replace(/```json|```/g, "").trim();
+    const parsed = JSON.parse(jsonStr) as { language?: string | null; english?: string };
+    const english = typeof parsed.english === "string" && parsed.english.trim() ? parsed.english.trim() : text;
+    let language = typeof parsed.language === "string" && parsed.language.trim() ? parsed.language.trim() : null;
+    if (language && /^(unknown|null|n\/a|ambiguous)$/i.test(language)) language = null;
+    // A phone-guessed language should not be overwritten by "English" when the
+    // user just typed a bare command word — only switch on real prose.
+    if (language === "English" && text.trim().split(/\s+/).length < 3) language = null;
+    return { text: english, language };
+  } catch (e) {
+    console.error("normalizeInbound failed", e);
+    return { text, language: null };
   }
 }
 
@@ -396,13 +470,30 @@ function parseDateOnly(text: string): string | null {
 
 // Build a public chart image URL using QuickChart (Chart.js renderer).
 // Green = infertile days, Red = fertile window, dashed line = ovulation.
+export type ChartLabels = { title: string; xAxis: string; yAxis: string };
+
+// Translate the handful of words that appear inside the chart image so the
+// picture matches the language of the message it ships with.
+async function chartLabels(profile: any, phone: string, cycleDay: number, avgCycleLength: number): Promise<ChartLabels> {
+  const base: ChartLabels = {
+    title: `Cycle overview — day ${cycleDay} of ~${avgCycleLength}`,
+    xAxis: "Cycle day",
+    yAxis: "°C",
+  };
+  const lang = userLang(profile, phone);
+  if (lang === "English") return base;
+  const [title, xAxis, yAxis] = await translateMany([base.title, base.xAxis, base.yAxis], lang);
+  return { title, xAxis, yAxis };
+}
+
 function buildChartUrl(args: {
   avgCycleLength: number;
   periodLength: number;
   temps: TempPoint[];
   stats: CycleStats;
+  labels?: ChartLabels;
 }): string {
-  const { avgCycleLength, periodLength, temps, stats } = args;
+  const { avgCycleLength, periodLength, temps, stats, labels } = args;
   const maxTempDay = temps.reduce((m, p) => Math.max(m, p.day), 1);
   const minDay = 1;
   const maxDay = Math.max(avgCycleLength, stats.cycleDay, stats.fertileEndDay + 2, maxTempDay, 28);
@@ -463,18 +554,26 @@ function buildChartUrl(args: {
     },
     options: {
       plugins: {
-        title: { display: true, text: `Cycle overview — day ${stats.cycleDay} of ~${avgCycleLength}` },
+        title: {
+          display: true,
+          text: labels?.title ?? `Cycle overview — day ${stats.cycleDay} of ~${avgCycleLength}`,
+        },
         legend: { display: false },
         annotation: { annotations },
       },
 
       scales: {
-        y: { min: 35.5, max: 37.5, title: { display: true, text: "°C" }, grid: { color: "rgba(15,23,42,0.06)" } },
+        y: {
+          min: 35.5,
+          max: 37.5,
+          title: { display: true, text: labels?.yAxis ?? "°C" },
+          grid: { color: "rgba(15,23,42,0.06)" },
+        },
         x: {
           type: "linear",
           min: minDay,
           max: maxDay,
-          title: { display: true, text: "Cycle day" },
+          title: { display: true, text: labels?.xAxis ?? "Cycle day" },
           ticks: { stepSize: 1, autoSkip: false, precision: 0 },
           grid: { color: "rgba(15,23,42,0.08)" },
         },
@@ -558,8 +657,14 @@ export async function handleIncomingMessage(args: {
   profileOverride?: any;
 }) {
   const { from, waMessageId, text, raw, capture, profileOverride } = args;
-  const trimmed = text.trim();
+  const original = text.trim();
+  // Understand messages written in any language: translate to English for the
+  // parsers below, and remember which language the user writes in so replies
+  // come back in that same language.
+  const normalized = await normalizeInbound(original, from);
+  const trimmed = normalized.text.trim();
   const lower = trimmed.toLowerCase();
+  const detectedLanguage = normalized.language;
 
   let profile = profileOverride ?? (await findUserByPhone(from));
   if (capture && profile) profile = { ...profile, __capture: capture };
@@ -572,7 +677,7 @@ export async function handleIncomingMessage(args: {
     });
     if (userErr || !userData?.user) {
       console.error("auto-create auth user failed", userErr);
-      await sendWhatsAppText(from, await translate("Sorry, something went wrong setting up your account. Please try again.", detectLanguage(from)));
+      await sendWhatsAppText(from, await translate("Sorry, something went wrong setting up your account. Please try again.", detectedLanguage ?? detectLanguage(from)));
       return;
     }
     const { data: updated, error: updErr } = await supabaseAdmin
@@ -583,7 +688,7 @@ export async function handleIncomingMessage(args: {
       .single();
     if (updErr || !updated) {
       console.error("auto-create profile update failed", updErr);
-      await sendWhatsAppText(from, await translate("Sorry, something went wrong setting up your account. Please try again.", detectLanguage(from)));
+      await sendWhatsAppText(from, await translate("Sorry, something went wrong setting up your account. Please try again.", detectedLanguage ?? detectLanguage(from)));
       return;
     }
     profile = updated;
@@ -611,11 +716,31 @@ export async function handleIncomingMessage(args: {
 Reply with a date — e.g. *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days ago*.
 
 Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type *help* anytime.`;
-    await sendWhatsAppText(from, await translate(welcome, detectLanguage(from)));
-    await logInbound(profile.id, from, waMessageId, trimmed, raw);
+    const welcomeLang = detectedLanguage ?? detectLanguage(from);
+    if (detectedLanguage) {
+      const st = { ...initialState, detected_language: detectedLanguage };
+      await supabaseAdmin.from("profiles").update({ bot_state: st }).eq("id", profile.id);
+      profile.bot_state = st;
+    }
+    const outbound = await translate(welcome, welcomeLang);
+    if (capture) capture.push({ text: outbound });
+    else await sendWhatsAppText(from, outbound);
+    await logOutbound(profile.id, outbound);
+    await logInbound(profile.id, from, waMessageId, original, raw);
     return;
   }
-  await logInbound(profile.id, from, waMessageId, trimmed, raw);
+  await logInbound(profile.id, from, waMessageId, original, raw);
+
+  // Remember the language the user writes in (unless they set an explicit
+  // `lang` override), so every future reply matches it.
+  if (detectedLanguage) {
+    const st = readBotState(profile);
+    if (!st.language && st.detected_language !== detectedLanguage) {
+      const next = { ...st, detected_language: detectedLanguage };
+      await supabaseAdmin.from("profiles").update({ bot_state: next }).eq("id", profile.id);
+      profile = { ...profile, bot_state: next };
+    }
+  }
 
 
 
@@ -803,17 +928,21 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
         pointRadius: 3,
       };
     });
+    const [histTitle, histY, histX] = await translateMany(
+      [`BBT history — ${spanMonthsTxt}`, "°C", "Date"],
+      userLang(profile, from),
+    );
     const cfg = {
       type: "line",
       data: { datasets },
       options: {
         plugins: {
-          title: { display: true, text: `BBT history — ${spanMonthsTxt}` },
+          title: { display: true, text: histTitle },
           legend: { display: true, position: "bottom" },
         },
         scales: {
-          y: { min: 35.5, max: 37.5, title: { display: true, text: "°C" } },
-          x: { type: "time", time: { unit: "day", tooltipFormat: "yyyy-MM-dd" }, title: { display: true, text: "Date" } },
+          y: { min: 35.5, max: 37.5, title: { display: true, text: histY } },
+          x: { type: "time", time: { unit: "day", tooltipFormat: "yyyy-MM-dd" }, title: { display: true, text: histX } },
         },
       },
     };
@@ -1249,7 +1378,7 @@ Rules:
 - When an update intent is set, leave "reply" null.
 - Otherwise write a short, warm "reply" (max 3 short sentences) in the fertility/BBT context. Use *asterisks* for bold. Never invent medical advice.
 - Always end "reply" with a friendly nudge like: "Type *help* anytime for more."
-- Reply language: ${lang}. Write "reply" natively in that language.`;
+- Write "reply" in ENGLISH. The bot translates it into the user's language (${lang}) before sending, so do not translate it yourself.`;
 
   try {
     const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -1354,6 +1483,7 @@ async function sendStatus(profile: any, from: string) {
     periodLength: profile.period_length,
     temps,
     stats,
+    labels: await chartLabels(profile, from, stats.cycleDay, stats.predictedCycleLength),
   });
   await replyImage(profile, from, await shortenChartUrl(chartUrl), caption);
 }
@@ -1602,6 +1732,7 @@ async function handleTempLog(
     periodLength: profile.period_length,
     temps,
     stats,
+    labels: await chartLabels(profile, from, stats.cycleDay, stats.predictedCycleLength),
   });
   await replyImage(profile, from, await shortenChartUrl(chartUrl), caption);
 }
