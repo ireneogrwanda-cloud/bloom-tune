@@ -832,21 +832,10 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
       await reply(profile, from, "📅 I didn't recognize that date. Try *bleeding started 2026-06-01*, *bleeding started 01/06*, *bleeding started yesterday*, or *bleeding started 5 days ago*.");
       return;
     }
-    const { data: activeCycle } = await supabaseAdmin
-      .from("cycles")
-      .select("id, started_on")
-      .eq("user_id", profile.id)
-      .eq("status", "active")
-      .order("started_on", { ascending: false })
-      .maybeSingle();
-    if (activeCycle) {
-      await supabaseAdmin.from("cycles").update({ started_on: newStart, ended_on: null, status: "active" }).eq("id", activeCycle.id);
-    } else {
-      await supabaseAdmin.from("cycles").insert({ user_id: profile.id, started_on: newStart, status: "active" });
-    }
-    await reply(profile, from, `✅ Updated — your current period started on *${newStart}*. Predictions will re-align from this date.`);
+    await applyPeriodStart(profile, from, newStart);
     return;
   }
+
 
 
 
