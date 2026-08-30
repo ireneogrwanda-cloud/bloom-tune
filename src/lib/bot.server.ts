@@ -1214,24 +1214,40 @@ async function interpretUnknown(
   text: string,
   profile: any,
   phone: string,
-): Promise<{ intent?: "help" | "status" | "chart" | "history"; reply?: string } | null> {
+): Promise<{
+  intent?: "help" | "status" | "chart" | "history" | "set_period_start" | "set_cycle_day" | "log_temp" | "set_lengths";
+  date?: string;
+  day?: number;
+  temp?: number;
+  avgCycleLength?: number;
+  periodLength?: number;
+  reply?: string;
+} | null> {
   const key = process.env.LOVABLE_API_KEY;
   if (!key) return null;
   const lang = userLang(profile, phone);
+  const today = isoDate(new Date());
   const system = `You are Mira, a warm WhatsApp fertility-tracking companion. A user sent a message the bot's parser did not recognize. Understand what they mean and respond.
 
-Available commands you can DISPATCH by returning an "intent":
-- "help" — show all commands and BBT usage tips
-- "status" — show current cycle day, fertile window, and chart
-- "chart" — same as status
-- "history" — show past cycles with graph
+Today's date is ${today} (ISO). The user's stored average cycle length is ${profile?.avg_cycle_length ?? 28} days and period length ${profile?.period_length ?? 5} days.
+
+Intents you can return:
+- "help" — they want the command list or BBT usage tips
+- "status" / "chart" — they want their current cycle day, fertile window, chart
+- "history" — they want past cycles
+- "set_period_start" — they are TELLING you when their period/bleeding started or restarted (also "I started my period today", "my period came 3 days ago", "I began bleeding on the 5th"). Resolve to an absolute ISO date in "date". Never a future date.
+- "set_cycle_day" — they say which cycle day they are on today (e.g. "I'm on day 12"). Put the number in "day".
+- "log_temp" — they describe a temperature reading in words (e.g. "my temp this morning was 36.62"). Put the number in "temp", optional "date" (ISO) or "day".
+- "set_lengths" — they tell you their usual cycle length and/or period length. Put numbers in "avgCycleLength" / "periodLength".
 
 Return STRICT JSON, no prose, no markdown fences:
-{ "intent": "help" | "status" | "chart" | "history" | null, "reply": string | null }
+{ "intent": <one of the above or null>, "date": string|null, "day": number|null, "temp": number|null, "avgCycleLength": number|null, "periodLength": number|null, "reply": string|null }
 
 Rules:
-- If the message clearly maps to one of the intents above, set "intent" and leave "reply" null.
-- Otherwise set "intent" to null and write a short, warm "reply" (max 3 short sentences) that answers the user's question in the fertility/BBT context, or gently guides them. Use *asterisks* for bold on WhatsApp. Never invent medical advice — this is not a contraceptive method.
+- If the user is TELLING you a fact about their cycle, prefer the matching update intent so the bot applies it — do NOT just explain that you can't update it. You CAN update it.
+- Only set an update intent when the value is clear; if the date or number is ambiguous, set intent null and ask one short clarifying question in "reply".
+- When an update intent is set, leave "reply" null.
+- Otherwise write a short, warm "reply" (max 3 short sentences) in the fertility/BBT context. Use *asterisks* for bold. Never invent medical advice.
 - Always end "reply" with a friendly nudge like: "Type *help* anytime for more."
 - Reply language: ${lang}. Write "reply" natively in that language.`;
 
@@ -1254,9 +1270,29 @@ Rules:
     if (!raw) return null;
     const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
     const parsed = JSON.parse(cleaned);
-    const intent = ["help", "status", "chart", "history"].includes(parsed?.intent) ? parsed.intent : undefined;
+    const allowed = ["help", "status", "chart", "history", "set_period_start", "set_cycle_day", "log_temp", "set_lengths"];
+    const intent = allowed.includes(parsed?.intent) ? parsed.intent : undefined;
+    const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
+    const date =
+      typeof parsed?.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(parsed.date) && parsed.date <= today
+        ? parsed.date
+        : undefined;
     const reply = typeof parsed?.reply === "string" ? parsed.reply : undefined;
-    return { intent, reply };
+    return {
+      intent,
+      date,
+      day: num(parsed?.day),
+      temp: num(parsed?.temp),
+      avgCycleLength: num(parsed?.avgCycleLength),
+      periodLength: num(parsed?.periodLength),
+      reply,
+    };
+  } catch (e) {
+    console.error("interpretUnknown failed", e);
+    return null;
+  }
+}
+
   } catch (e) {
     console.error("interpretUnknown failed", e);
     return null;
