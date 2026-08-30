@@ -1187,7 +1187,7 @@ async function applyCycleDay(profile: any, from: string, day: number) {
 }
 
 async function applyLengths(profile: any, from: string, avgCycleLength?: number, periodLength?: number) {
-  const update: Record<string, number> = {};
+  const update: { avg_cycle_length?: number; period_length?: number } = {};
   if (typeof avgCycleLength === "number" && avgCycleLength >= 20 && avgCycleLength <= 45) {
     update.avg_cycle_length = Math.round(avgCycleLength);
   }
