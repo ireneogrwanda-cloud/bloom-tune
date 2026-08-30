@@ -204,6 +204,76 @@ async function translate(text: string, lang: string): Promise<string> {
   }
 }
 
+// Translate a batch of short UI strings (chart titles, axis labels) in one call.
+async function translateMany(items: string[], lang: string): Promise<string[]> {
+  if (lang === "English" || items.length === 0) return items;
+  const joined = items.join("\n@@\n");
+  const out = await translate(joined, lang);
+  const parts = out.split(/\s*@@\s*/).map((s) => s.trim());
+  return parts.length === items.length ? parts : items;
+}
+
+// Does the message already look like something the English parsers handle?
+// (numbers, dates, known commands, yes/no) — if so we skip the AI round-trip.
+const ENGLISH_COMMAND_RE =
+  /^\/?(help|status|chart|history|cycles|period|periods|reset\s+cycle|lang(uage)?\b.*|bleeding\s+started.*|period\s+started.*|menstruation\s+started.*)$/i;
+
+function looksAlreadyParseable(text: string): boolean {
+  const t = text.trim();
+  if (!t) return true;
+  if (/[^\u0000-\u007F]/.test(t)) return false; // any non-ASCII → let the AI look at it
+  if (ENGLISH_COMMAND_RE.test(t)) return true;
+  if (/^\d{1,2}([.,]\d{1,2})?(\s*(°?c)?)?(\s+.*)?$/i.test(t)) return true; // temperature (+ optional day/date)
+  if (isYes(t) || isNo(t)) return true;
+  return false;
+}
+
+// Understand a message written in ANY language: detect the language the user
+// writes in and produce an English version the rest of the parsers can read.
+// Falls back to the original text whenever the AI is unavailable.
+async function normalizeInbound(
+  text: string,
+  phone: string,
+): Promise<{ text: string; language: string | null }> {
+  if (looksAlreadyParseable(text)) return { text, language: null };
+  const key = process.env.LOVABLE_API_KEY;
+  if (!key) return { text, language: null };
+  try {
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          {
+            role: "system",
+            content: `You normalize incoming WhatsApp messages for a fertility-tracking bot.
+Detect the language the message is written in (English name, e.g. "Kinyarwanda", "French", "Swahili", "Spanish"). If the language is genuinely ambiguous (only digits, emoji, or a name), return null for language.
+Then translate the message faithfully into English, keeping every number, date, and cycle-day reference intact. Do not answer the message, do not add anything.
+Return STRICT JSON only: {"language": string|null, "english": string}`,
+          },
+          { role: "user", content: text },
+        ],
+      }),
+    });
+    if (!res.ok) return { text, language: null };
+    const data = await res.json();
+    const raw: string = data?.choices?.[0]?.message?.content ?? "";
+    const jsonStr = raw.replace(/```json|```/g, "").trim();
+    const parsed = JSON.parse(jsonStr) as { language?: string | null; english?: string };
+    const english = typeof parsed.english === "string" && parsed.english.trim() ? parsed.english.trim() : text;
+    let language = typeof parsed.language === "string" && parsed.language.trim() ? parsed.language.trim() : null;
+    if (language && /^(unknown|null|n\/a|ambiguous)$/i.test(language)) language = null;
+    // A phone-guessed language should not be overwritten by "English" when the
+    // user just typed a bare command word — only switch on real prose.
+    if (language === "English" && text.trim().split(/\s+/).length < 3) language = null;
+    return { text: english, language };
+  } catch (e) {
+    console.error("normalizeInbound failed", e);
+    return { text, language: null };
+  }
+}
+
 
 function normalizePhone(p: string): string {
   return p.replace(/[^\d]/g, "");
