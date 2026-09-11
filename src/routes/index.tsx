@@ -298,7 +298,7 @@ function ChatThread() {
             endRef.current?.scrollIntoView({ behavior: "smooth" });
           }}
           aria-label="Scroll to latest message"
-          className="pointer-events-auto absolute bottom-28 right-4 z-10 rounded-full bg-card p-2 shadow-md"
+          className="fixed bottom-28 right-4 z-10 rounded-full bg-card p-2 shadow-md"
         >
           <ArrowDown className="h-4 w-4 text-muted-foreground" />
         </button>
