@@ -4,9 +4,9 @@ import { CheckCircle2, Thermometer, Activity, ShieldAlert, HeartPulse, BookOpen 
 export const Route = createFileRoute("/_authenticated/how-it-works")({
   head: () => ({
     meta: [
-      { title: "How My Cycle AI works — My Cycle AI" },
+      { title: "How My Cycle AI works" },
       { name: "description", content: "The science behind My Cycle AI's fertility predictions: basal body temperature, the 3-over-6 rule, luteal phase detection, and the fertile window." },
-      { property: "og:title", content: "How My Cycle AI works — My Cycle AI" },
+      { property: "og:title", content: "How My Cycle AI works" },
       { property: "og:description", content: "The science behind My Cycle AI's fertility predictions: basal body temperature, the 3-over-6 rule, luteal phase detection, and the fertile window." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
