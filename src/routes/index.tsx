@@ -195,9 +195,11 @@ function ChatThread() {
   const qc = useQueryClient();
   const fetchHistory = useServerFn(getChatHistory);
   const send = useServerFn(sendChatMessage);
+  const fetchDash = useServerFn(getDashboard);
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const [atBottom, setAtBottom] = useState(true);
+  const [chartOpen, setChartOpen] = useState(true);
   const endRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -207,10 +209,16 @@ function ChatThread() {
     queryFn: () => fetchHistory({}),
   });
 
+  const { data: dash } = useQuery({
+    queryKey: ["dashboard"],
+    queryFn: () => fetchDash(),
+  });
+
   const mutation = useMutation({
     mutationFn: (text: string) => send({ data: { text } }),
     onSettled: async () => {
       await qc.invalidateQueries({ queryKey: ["chat-history"] });
+      await qc.invalidateQueries({ queryKey: ["dashboard"] });
       setPending(null);
     },
   });
