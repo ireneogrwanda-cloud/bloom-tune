@@ -48,10 +48,31 @@ export const requestWhatsAppCode = createServerFn({ method: "POST" })
       .insert({ phone: n, code_hash: codeHash, expires_at: expiresAt });
     if (error) throw error;
 
-    await sendWhatsAppText(
+    const sent = (await sendWhatsAppText(
       `+${n}`,
       `🔐 Your My Cycle AI login code is ${code}\n\nIt expires in 10 minutes. Never share this code with anyone.`,
-    );
+    )) as { sid?: string };
+
+    // Twilio accepts the message first and fails asynchronously, so confirm delivery
+    // started before telling the user to watch their phone.
+    if (sent?.sid) {
+      const { getMessageStatus } = await import("@/lib/whatsapp.server");
+      for (let i = 0; i < 4; i++) {
+        await new Promise((r) => setTimeout(r, 1200));
+        const st = await getMessageStatus(sent.sid);
+        if (!st) break;
+        if (st.status === "failed" || st.status === "undelivered") {
+          await supabaseAdmin.from("wa_otp_codes").delete().eq("phone", n).is("consumed_at", null);
+          if (st.errorCode === 63015 || st.errorCode === 63016 || st.errorCode === 21211) {
+            throw new Error(
+              "WhatsApp would not deliver the code to this number yet. Open WhatsApp, send the join message to +1 415 523 8886 to connect with My Cycle AI, then try again.",
+            );
+          }
+          throw new Error("WhatsApp could not deliver the code to this number. Please check it and try again.");
+        }
+        if (st.status === "sent" || st.status === "delivered" || st.status === "read") break;
+      }
+    }
 
     return { ok: true, phone: n };
   });
