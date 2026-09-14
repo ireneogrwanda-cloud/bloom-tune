@@ -501,7 +501,9 @@ function buildChartUrl(args: {
 
   // Green = confident infertile, Red = fertile or uncertain.
   const preFertileConfirmed = stats.cyclesAnalyzed >= 3;
-  const postFertileConfirmed = stats.fertileWindowClosed;
+  // Luteal phase opens as soon as BBT confirms ovulation (3-over-6 rise) —
+  // don't wait for today to pass the fertile window.
+  const postFertileConfirmed = stats.ovulationConfirmed;
   const colorForDay = (d: number) => {
     if (d >= stats.fertileStartDay && d <= stats.fertileEndDay) return "rgb(220,38,38)";
     if (d <= periodLength) return "rgb(22,163,74)";
@@ -530,6 +532,26 @@ function buildChartUrl(args: {
       drawTime: "beforeDatasetsDraw",
     };
   });
+
+  // Mark the confirmed ovulation day on the graph.
+  if (stats.ovulationConfirmed) {
+    annotations.ovulation = {
+      type: "line",
+      xMin: stats.estimatedOvulationDay,
+      xMax: stats.estimatedOvulationDay,
+      borderColor: "rgb(126,34,206)",
+      borderWidth: 2,
+      borderDash: [6, 3],
+      label: {
+        display: true,
+        content: `Ovulation · day ${stats.estimatedOvulationDay}`,
+        position: "start",
+        backgroundColor: "rgba(126,34,206,0.9)",
+        color: "white",
+        font: { size: 10 },
+      },
+    };
+  }
 
   const cfg = {
     type: "line",
@@ -1494,8 +1516,8 @@ async function sendStatus(profile: any, from: string) {
     "",
     `🔴 Fertile window: days ${stats.fertileStartDay}–${stats.fertileEndDay} (${fertileStartDate} → ${fertileEndDate})`,
     `🟢 Other days are low-fertility.`,
-    stats.fertileWindowClosed
-      ? `🟢 No protection needed today — fertile window confirmed closed by 3+ days of elevated temperature.`
+    stats.ovulationConfirmed
+      ? `🟢 Luteal phase confirmed by 3+ days of elevated temperature — no protection needed from now until your next period.`
       : `🛡️ Use protection today.`,
     ovText,
     `🩸 Next period predicted: ${nextPeriodDate}`,
@@ -1742,8 +1764,8 @@ async function handleTempLog(
     "",
     `${fertileNote}: days ${stats.fertileStartDay}–${stats.fertileEndDay}`,
     greenNote,
-    stats.fertileWindowClosed
-      ? `🟢 No protection needed today — fertile window confirmed closed by 3+ days of elevated temperature.`
+    stats.ovulationConfirmed
+      ? `🟢 Luteal phase confirmed by 3+ days of elevated temperature — no protection needed from now until your next period.`
       : `🛡️ Use protection today.`,
     stats.ovulationConfirmed
       ? `🥚 Ovulation confirmed around day ${stats.estimatedOvulationDay} (${ovDate})`
