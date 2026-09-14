@@ -692,10 +692,12 @@ export async function handleIncomingMessage(args: {
       return;
     }
     profile = updated;
-    const initialState = { awaiting_period_start: true };
+    const initialState = { awaiting_name: true, awaiting_period_start: true };
     await supabaseAdmin.from("profiles").update({ bot_state: initialState }).eq("id", profile.id);
     profile.bot_state = initialState;
     const welcome = `👋 Welcome! I've set up a new account for you.
+
+🙋 *First, what's your name?* Just reply with your name so I know what to call you.
 
 ℹ️ This bot helps you track fertility patterns.
 
@@ -1057,6 +1059,29 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
   const tempCheck = checkTemperatureInput(trimmed);
   if (tempCheck.attempt && !tempCheck.ok) {
     await reply(profile, from, TEMP_ERROR_MSG);
+    return;
+  }
+
+  // Onboarding: waiting for the user's name.
+  if (botState.awaiting_name) {
+    const name = trimmed.replace(/\s+/g, " ").trim();
+    // Accept anything that looks like a name (letters, spaces, hyphens, apostrophes).
+    if (/^[\p{L}][\p{L}\s'’.-]{0,60}$/u.test(name)) {
+      await supabaseAdmin.from("profiles").update({ display_name: name }).eq("id", profile.id);
+      const nextState = { ...botState, awaiting_name: false };
+      await supabaseAdmin.from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
+      profile = { ...profile, bot_state: nextState };
+      await reply(
+        profile,
+        from,
+        `Nice to meet you, *${name}*! 😊
+
+📅 Now let's anchor your cycle: what date did your *last period start* (day 1 of bleeding)?
+Reply with a date — e.g. *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days ago*.`,
+      );
+      return;
+    }
+    await reply(profile, from, "🙋 Please reply with just your name (letters only) so I know what to call you.");
     return;
   }
 
