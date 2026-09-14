@@ -25,13 +25,13 @@ import {
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Mira — chat your daily temperature, know your fertile days" },
+      { title: "My Cycle AI — chat your daily temperature, know your fertile days" },
       {
         name: "description",
         content:
-          "Chat with Mira just like WhatsApp: send your morning basal body temperature and get instant fertile-window predictions and cycle charts.",
+          "Chat with My Cycle AI just like WhatsApp: send your morning basal body temperature and get instant fertile-window predictions and cycle charts.",
       },
-      { property: "og:title", content: "Mira — chat your daily temperature, know your fertile days" },
+      { property: "og:title", content: "My Cycle AI — chat your daily temperature, know your fertile days" },
       {
         property: "og:description",
         content: "A WhatsApp-style chat that turns your daily BBT into clear fertile and infertile days.",
@@ -78,7 +78,7 @@ function InstallBanner() {
     <div className="flex items-center gap-3 border-b bg-emerald-50 px-4 py-2 text-emerald-900">
       <img src="/icon-192.png" alt="" width={32} height={32} className="h-8 w-8 rounded-lg" loading="lazy" />
       <div className="min-w-0 flex-1 text-xs">
-        <p className="font-medium">Add Mira to your home screen</p>
+        <p className="font-medium">Add My Cycle AI to your home screen</p>
         {showIosHint ? (
           <p className="flex items-center gap-1 text-[11px] text-emerald-800/80">
             Tap <Share className="h-3 w-3" /> then “Add to Home Screen”
@@ -107,10 +107,10 @@ function ChatHeader({ authed }: { authed: boolean | null }) {
   return (
     <header className="sticky top-0 z-10 flex items-center gap-3 bg-emerald-700 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] text-emerald-50 shadow-md">
       <span className="inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-emerald-50">
-        <img src="/icon-192.png" alt="Mira" width={40} height={40} className="h-10 w-10" />
+        <img src="/icon-192.png" alt="My Cycle AI" width={40} height={40} className="h-10 w-10" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate font-semibold leading-tight">Mira</p>
+        <p className="truncate font-semibold leading-tight">My Cycle AI</p>
         <p className="truncate text-xs text-emerald-100/90">fertility assistant · online</p>
       </div>
       <div className="flex items-center gap-1 opacity-90">
@@ -142,7 +142,7 @@ function SignedOutPane() {
   return (
     <div className="flex flex-1 flex-col justify-end gap-3 px-4 py-6" style={WALLPAPER_STYLE}>
       <Bubble side="left">
-        👋 Hi! I'm <strong>Mira</strong>. Send me your morning basal body temperature — like <em>36.52</em> — and I'll
+        👋 Hi! I'm <strong>My Cycle AI</strong>. Send me your morning basal body temperature — like <em>36.52</em> — and I'll
         tell you your cycle day, your fertile window, and chart it for you.
       </Bubble>
       <Bubble side="right">36.52</Bubble>
@@ -155,7 +155,7 @@ function SignedOutPane() {
         🥚 Predicted ovulation: day 14
       </Bubble>
       <div className="rounded-2xl border bg-card p-4 shadow-sm">
-        <p className="text-sm font-medium">Sign in to start chatting with Mira</p>
+        <p className="text-sm font-medium">Sign in to start chatting with My Cycle AI</p>
         <p className="mt-1 text-xs text-muted-foreground">
           Your chat works the same here and on WhatsApp — same history, same predictions.
         </p>
@@ -330,7 +330,7 @@ function ChatThread() {
               onChange={(e) => setDraft(e.target.value)}
               maxLength={500}
               placeholder="Type a message, e.g. 36.52"
-              aria-label="Message Mira"
+              aria-label="Message My Cycle AI"
               className="min-w-0 flex-1 bg-transparent text-sm outline-none"
             />
             <Paperclip className="h-5 w-5 shrink-0 text-muted-foreground" />

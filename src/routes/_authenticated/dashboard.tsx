@@ -12,7 +12,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceA
 import { MessageCircle, ThermometerSun, RotateCcw } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
-  head: () => ({ meta: [{ title: "Dashboard — Mira" }] }),
+  head: () => ({ meta: [{ title: "Dashboard — My Cycle AI" }] }),
   component: Dashboard,
 });
 

@@ -31,7 +31,7 @@ function AuthLayout() {
         <div className="container mx-auto flex items-center justify-between px-6 py-3">
           <Link to="/dashboard" className="flex items-center gap-2 font-semibold">
             <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-rose-500 text-white text-sm">M</span>
-            Mira
+            My Cycle AI
           </Link>
           <nav className="flex items-center gap-1">
             <Button asChild variant="ghost" size="sm"><Link to="/dashboard">Dashboard</Link></Button>
@@ -44,7 +44,7 @@ function AuthLayout() {
       <main className="container mx-auto px-6 py-8"><Outlet /></main>
       <footer className="mt-12 border-t bg-muted/30">
         <div className="container mx-auto px-6 py-4 text-xs text-muted-foreground">
-          <strong>Mira is not medical advice and not a contraceptive method.</strong> Always consult a healthcare provider.
+          <strong>My Cycle AI is not medical advice and not a contraceptive method.</strong> Always consult a healthcare provider.
         </div>
       </footer>
     </div>

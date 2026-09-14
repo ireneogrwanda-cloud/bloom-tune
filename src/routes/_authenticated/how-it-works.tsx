@@ -4,10 +4,10 @@ import { CheckCircle2, Thermometer, Activity, ShieldAlert, HeartPulse, BookOpen 
 export const Route = createFileRoute("/_authenticated/how-it-works")({
   head: () => ({
     meta: [
-      { title: "How Mira works — Mira" },
-      { name: "description", content: "The science behind Mira's fertility predictions: basal body temperature, the 3-over-6 rule, luteal phase detection, and the fertile window." },
-      { property: "og:title", content: "How Mira works — Mira" },
-      { property: "og:description", content: "The science behind Mira's fertility predictions: basal body temperature, the 3-over-6 rule, luteal phase detection, and the fertile window." },
+      { title: "How My Cycle AI works — My Cycle AI" },
+      { name: "description", content: "The science behind My Cycle AI's fertility predictions: basal body temperature, the 3-over-6 rule, luteal phase detection, and the fertile window." },
+      { property: "og:title", content: "How My Cycle AI works — My Cycle AI" },
+      { property: "og:description", content: "The science behind My Cycle AI's fertility predictions: basal body temperature, the 3-over-6 rule, luteal phase detection, and the fertile window." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -19,9 +19,9 @@ function HowItWorks() {
   return (
     <div className="max-w-3xl space-y-8">
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">How Mira predicts your fertility</h1>
+        <h1 className="text-3xl font-bold tracking-tight">How My Cycle AI predicts your fertility</h1>
         <p className="text-muted-foreground">
-          Mira combines a simple body-signal — your morning temperature — with well-known fertility-awareness science.
+          My Cycle AI combines a simple body-signal — your morning temperature — with well-known fertility-awareness science.
         </p>
       </div>
 
@@ -61,7 +61,7 @@ function HowItWorks() {
               </li>
             </ul>
             <p className="mt-3 text-sm text-muted-foreground">
-              Mira tolerates a few missed days, so a gap of one or two blank readings does not break the rule.
+              My Cycle AI tolerates a few missed days, so a gap of one or two blank readings does not break the rule.
             </p>
           </div>
         </div>
@@ -99,11 +99,11 @@ function HowItWorks() {
                 The egg is only viable for about <strong>12–24 hours</strong> after ovulation.
               </li>
               <li>
-                So Mira marks the window as roughly <strong>5 days before ovulation through 1 day after</strong>.
+                So My Cycle AI marks the window as roughly <strong>5 days before ovulation through 1 day after</strong>.
               </li>
             </ul>
             <p className="mt-3 text-sm text-muted-foreground">
-              Until ovulation is confirmed by a clear temperature rise, Mira keeps the red “treat as fertile” zone wider. Once the rise is confirmed, the fertile window closes and the days after turn green.
+              Until ovulation is confirmed by a clear temperature rise, My Cycle AI keeps the red “treat as fertile” zone wider. Once the rise is confirmed, the fertile window closes and the days after turn green.
             </p>
           </div>
         </div>
@@ -126,7 +126,7 @@ function HowItWorks() {
               <div className="rounded-xl bg-rose-50 p-4 dark:bg-rose-950/20">
                 <p className="font-medium text-rose-700 dark:text-rose-400">Red — fertile or uncertain</p>
                 <p className="mt-1 text-sm text-rose-700/80 dark:text-rose-400/80">
-                  Inside the fertile window, or days where data is too limited to be confident. Mira defaults to red for safety.
+                  Inside the fertile window, or days where data is too limited to be confident. My Cycle AI defaults to red for safety.
                 </p>
               </div>
             </div>
@@ -142,7 +142,7 @@ function HowItWorks() {
           <div>
             <h2 className="text-lg font-semibold">Assumptions and references</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Mira is inspired by fertility-awareness methods, not a medical device. The main assumptions are:
+              My Cycle AI is inspired by fertility-awareness methods, not a medical device. The main assumptions are:
             </p>
             <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
               <li>The luteal phase is roughly 14 days long for most cycles.</li>

@@ -4,9 +4,9 @@ import { AuthShell, WhatsAppOtpForm } from "./login";
 export const Route = createFileRoute("/signup")({
   head: () => ({
     meta: [
-      { title: "Create your Mira account with WhatsApp" },
-      { name: "description", content: "Create a Mira account using just your WhatsApp number and a one-time code." },
-      { property: "og:title", content: "Create your Mira account with WhatsApp" },
+      { title: "Create your My Cycle AI account with WhatsApp" },
+      { name: "description", content: "Create a My Cycle AI account using just your WhatsApp number and a one-time code." },
+      { property: "og:title", content: "Create your My Cycle AI account with WhatsApp" },
       { property: "og:description", content: "Start tracking your cycle — sign up with your WhatsApp number." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },

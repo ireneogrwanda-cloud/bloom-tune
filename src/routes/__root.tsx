@@ -76,7 +76,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "theme-color", content: "#047857" },
       { name: "mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
-      { name: "apple-mobile-web-app-title", content: "Mira" },
+      { name: "apple-mobile-web-app-title", content: "My Cycle AI" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
       { title: "My Og Cycle" },
       { name: "description", content: "Cycle Companion is a WhatsApp chatbot that predicts fertility and infertility windows based on daily temperature input." },
