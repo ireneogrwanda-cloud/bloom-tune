@@ -68,7 +68,7 @@ export function WhatsAppOtpForm() {
       const { error } = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: tokenHash });
       if (error) throw new Error(error.message);
       toast.success(isNew ? "Welcome to My Cycle AI!" : "Welcome back");
-      nav({ to: isNew ? "/onboarding" : "/dashboard" });
+      nav({ to: isNew ? "/onboarding" : "/" });
     } catch (e: any) {
       toast.error(e?.message ?? "Could not sign you in");
     } finally {

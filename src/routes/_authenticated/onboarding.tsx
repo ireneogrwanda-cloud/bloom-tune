@@ -49,7 +49,7 @@ function Onboarding() {
         },
       });
       toast.success("All set!");
-      nav({ to: "/dashboard" });
+      nav({ to: "/" });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to save");
     } finally {
