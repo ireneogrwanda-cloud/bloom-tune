@@ -128,10 +128,25 @@ export function CycleChart({ profile, activeCycle, activeLogs, heightClass = "h-
                   stroke={postFertileConfirmed ? "hsl(142 70% 35%)" : "hsl(0 75% 50%)"}
                   strokeOpacity={0.25}
                   label={{
-                    value: postFertileConfirmed ? "Infertile" : "Treat as fertile",
+                    value: postFertileConfirmed ? "Luteal phase · infertile" : "Treat as fertile",
                     position: "insideTopRight",
                     fontSize: 10,
                     fill: postFertileConfirmed ? "hsl(142 60% 30%)" : "hsl(0 65% 35%)",
+                  }}
+                />
+              )}
+              {stats?.ovulationConfirmed && (
+                <ReferenceLine
+                  x={stats.estimatedOvulationDay}
+                  stroke="hsl(280 70% 45%)"
+                  strokeWidth={2}
+                  strokeDasharray="6 3"
+                  label={{
+                    value: `🥚 Ovulation · day ${stats.estimatedOvulationDay}`,
+                    position: "top",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    fill: "hsl(280 60% 35%)",
                   }}
                 />
               )}
