@@ -1,49 +1,130 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { requestWhatsAppCode, verifyWhatsAppCode } from "@/lib/otp.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/login")({
-  head: () => ({ meta: [{ title: "Sign in — Mira" }] }),
+  head: () => ({
+    meta: [
+      { title: "Sign in with WhatsApp — Mira" },
+      { name: "description", content: "Sign in to Mira with your WhatsApp number and a one-time code." },
+      { property: "og:title", content: "Sign in with WhatsApp — Mira" },
+      { property: "og:description", content: "No password needed — Mira sends a one-time code to your WhatsApp." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: LoginPage,
 });
 
 function LoginPage() {
+  return (
+    <AuthShell title="Sign in with WhatsApp" subtitle="We'll message you a one-time code — no password needed">
+      <WhatsAppOtpForm />
+    </AuthShell>
+  );
+}
+
+export function WhatsAppOtpForm() {
   const nav = useNavigate();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const sendCode = useServerFn(requestWhatsAppCode);
+  const checkCode = useServerFn(verifyWhatsAppCode);
+  const [step, setStep] = useState<"phone" | "code">("phone");
+  const [phone, setPhone] = useState("");
+  const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function onSubmit(e: React.FormEvent) {
+  async function onSendCode(e: React.FormEvent) {
+    e.preventDefault();
+    if (!/^\+?\d[\d\s\-()]{6,19}$/.test(phone)) {
+      return toast.error("Enter a valid WhatsApp number including country code");
+    }
+    setLoading(true);
+    try {
+      await sendCode({ data: { phone } });
+      toast.success("Code sent to your WhatsApp");
+      setStep("code");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not send the code");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onVerify(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) return toast.error(error.message);
-    toast.success("Welcome back");
-    nav({ to: "/dashboard" });
+    try {
+      const { tokenHash, isNew } = await checkCode({ data: { phone, code } });
+      const { error } = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: tokenHash });
+      if (error) throw new Error(error.message);
+      toast.success(isNew ? "Welcome to Mira!" : "Welcome back");
+      nav({ to: isNew ? "/onboarding" : "/dashboard" });
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not sign you in");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (step === "phone") {
+    return (
+      <form onSubmit={onSendCode} className="space-y-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="phone">WhatsApp number</Label>
+          <Input
+            id="phone"
+            type="tel"
+            autoComplete="tel"
+            placeholder="+1 555 123 4567"
+            required
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">Include your country code. This is also how the bot knows you.</p>
+        </div>
+        <Button type="submit" disabled={loading} className="w-full">
+          {loading ? "Sending code…" : "Send me a code"}
+        </Button>
+      </form>
+    );
   }
 
   return (
-    <AuthShell title="Welcome back" subtitle="Sign in to manage your cycles">
-      <form onSubmit={onSubmit} className="space-y-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="email">Email</Label>
-          <Input id="email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="password">Password</Label>
-          <Input id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-        </div>
-        <Button type="submit" disabled={loading} className="w-full">{loading ? "Signing in…" : "Sign in"}</Button>
-        <p className="text-center text-sm text-muted-foreground">
-          No account? <Link to="/signup" className="text-rose-600 hover:underline">Create one</Link>
-        </p>
-      </form>
-    </AuthShell>
+    <form onSubmit={onVerify} className="space-y-4">
+      <div className="space-y-1.5">
+        <Label htmlFor="code">6-digit code</Label>
+        <Input
+          id="code"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          maxLength={6}
+          placeholder="123456"
+          required
+          value={code}
+          onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+        />
+        <p className="text-xs text-muted-foreground">Sent to {phone} on WhatsApp. It expires in 10 minutes.</p>
+      </div>
+      <Button type="submit" disabled={loading || code.length !== 6} className="w-full">
+        {loading ? "Checking…" : "Continue"}
+      </Button>
+      <button
+        type="button"
+        className="w-full text-center text-sm text-muted-foreground hover:underline"
+        onClick={() => {
+          setStep("phone");
+          setCode("");
+        }}
+      >
+        Use a different number
+      </button>
+    </form>
   );
 }
 
@@ -60,9 +141,7 @@ export function AuthShell({ title, subtitle, children }: { title: string; subtit
           {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
           <div className="mt-6">{children}</div>
         </div>
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          <strong>Not medical advice</strong> · not a contraceptive method
-        </p>
+        <p className="mt-6 text-center text-xs text-muted-foreground">This bot helps you track fertility patterns.</p>
       </div>
     </div>
   );
