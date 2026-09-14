@@ -251,6 +251,32 @@ function ChatThread() {
 
   return (
     <>
+      {dash?.profile?.whatsapp_number ? (
+        <div className="border-b bg-background/60" style={WALLPAPER_STYLE}>
+          <button
+            type="button"
+            onClick={() => setChartOpen((o) => !o)}
+            aria-expanded={chartOpen}
+            className="flex w-full items-center justify-between px-4 py-2 text-xs font-medium text-emerald-900"
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <LineChartIcon className="h-3.5 w-3.5" /> Your cycle chart
+            </span>
+            {chartOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+          {chartOpen ? (
+            <div className="px-3 pb-3">
+              <CycleChart
+                profile={dash.profile}
+                activeCycle={dash.activeCycle}
+                activeLogs={dash.activeLogs}
+                heightClass="h-56"
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div
         ref={scrollRef}
         onScroll={onScroll}
