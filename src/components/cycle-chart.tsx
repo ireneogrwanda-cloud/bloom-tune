@@ -1,5 +1,5 @@
 import { predictCycle, type TempPoint } from "@/lib/fertility";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceArea, CartesianGrid } from "recharts";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceArea, ReferenceLine, CartesianGrid } from "recharts";
 import { ThermometerSun } from "lucide-react";
 
 export type CycleProfile = {
@@ -39,7 +39,9 @@ export function CycleChart({ profile, activeCycle, activeLogs, heightClass = "h-
     : null;
 
   const preFertileConfirmed = stats ? stats.cyclesAnalyzed >= 3 : false;
-  const postFertileConfirmed = stats ? stats.fertileWindowClosed : false;
+  // Once ovulation is confirmed by BBT, the luteal (post-ovulation) phase is
+  // open and infertile — don't wait for "today" to pass the window.
+  const postFertileConfirmed = stats ? stats.ovulationConfirmed : false;
 
   const temps = rawTemps.map((p) => {
     let kind: "fertile" | "safe" | "uncertain" = "safe";
