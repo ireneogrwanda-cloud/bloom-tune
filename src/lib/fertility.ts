@@ -68,20 +68,24 @@ const GAP_TOLERANCE_DAYS = 5;
 // ---------------------------------------------------------------------------
 // Temperature shift detection (shared by detectOvulation + confirmLutealPhase)
 //
-// Previous versions split all readings around the median and treated "the high
-// half" as the luteal phase. On a flat, noisy cycle that always produces a
-// "high cluster", so a single new reading could retroactively declare
-// ovulation weeks earlier. A real thermal shift is not a statistical split —
-// it is a *sustained* rise that starts on one day and holds through the most
-// recent reading.
-//
-// Rules enforced here (Sensiplan-style, gap tolerant):
+// Classic BBT "3-over-6" (Sensiplan-style):
 //  - coverline = highest of the (up to 6) readings immediately BEFORE the
 //    candidate shift day, ignoring one obvious fever outlier;
-//  - the shift must run from the candidate day through the LATEST reading —
-//    at most one dip below the coverline, never on the newest reading;
-//  - at least 3 elevated readings, the first three spanning ≤ 5 calendar days;
-//  - at least one reading ≥ coverline + 0.2 °C.
+//  - ovulation is confirmed by the NEXT 3 readings after the shift day: all
+//    above the coverline, the first and third spanning ≤ 5 calendar days,
+//    and the third reading ≥ coverline + 0.2 °C.
+//
+// Two lessons baked in:
+//  1. Never split all readings into "low half / high half" — on a flat, noisy
+//     cycle that invents a fake high phase and one new reading can
+//     retroactively "confirm" ovulation weeks earlier. Only a rise that
+//     clears the highest of the previous ~6 readings counts.
+//  2. Once 3 elevated readings have confirmed the shift, it STAYS confirmed.
+//     Judging the run against the latest reading makes a normal late-luteal
+//     temperature dip erase an already-confirmed ovulation.
+//
+// The gap-tolerant variant allows one dip among the first 4 readings, for
+// cycles with a missed log.
 // ---------------------------------------------------------------------------
 
 type Shift = {
@@ -117,26 +121,34 @@ function findTemperatureShift(points: TempPoint[], periodLength = 0): Shift | nu
     if (baseline.length < 4) continue;
     const coverline = baselineCoverline(baseline.map((p) => p.temp));
 
-    const run = sorted.slice(i);
-    if (run[0].temp <= coverline) continue;
-    if (run[run.length - 1].temp <= coverline) continue;
-
-    const dips = run.filter((p) => p.temp <= coverline);
-    if (dips.length > 1) continue;
-
-    const elevated = run.filter((p) => p.temp > coverline);
-    if (elevated.length < 3) continue;
-    if (elevated[2].day - elevated[0].day > GAP_TOLERANCE_DAYS) continue;
-    if (!elevated.some((p) => p.temp >= coverline + MIN_RISE_C)) continue;
-
-    const firstThree = run.slice(0, 3);
+    // Only the first 3–4 readings after the candidate day decide the shift.
+    // Later luteal readings (including the natural pre-period drop) must not
+    // un-confirm an established shift.
+    const firstThree = sorted.slice(i, i + 3);
+    const strongRise = firstThree[2].temp >= coverline + MIN_RISE_C;
     const strict =
-      dips.length === 0 &&
       firstThree.every((p) => p.temp > coverline) &&
       firstThree[2].day - firstThree[0].day <= GAP_TOLERANCE_DAYS &&
-      firstThree.some((p) => p.temp >= coverline + MIN_RISE_C);
+      strongRise;
 
-    return { ovulationDay: run[0].day - 1, coverline, lutealStartDay: run[0].day, strict };
+    if (strict) {
+      return { ovulationDay: firstThree[0].day - 1, coverline, lutealStartDay: firstThree[0].day, strict: true };
+    }
+
+    // Gap-tolerant: one dip allowed within the first 4 readings (missed log),
+    // still needs 3 elevated readings tightly clustered and a 0.2 °C rise.
+    const window = sorted.slice(i, i + 4);
+    const elevated = window.filter((p) => p.temp > coverline);
+    const dips = window.filter((p) => p.temp <= coverline);
+    if (
+      window.length >= 4 &&
+      elevated.length >= 3 &&
+      dips.length <= 1 &&
+      elevated[2].day - elevated[0].day <= GAP_TOLERANCE_DAYS &&
+      elevated.some((p) => p.temp >= coverline + MIN_RISE_C)
+    ) {
+      return { ovulationDay: window[0].day - 1, coverline, lutealStartDay: window[0].day, strict: false };
+    }
   }
   return null;
 }
