@@ -791,7 +791,7 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
         "",
         "ℹ️ This bot helps you track fertility patterns.",
         "",
-        "🌐 *Open Mira on the web*",
+        "🌐 *Open My Cycle AI on the web*",
         `View your charts, history and chat with me just like here on WhatsApp — sign in or create a free account with your WhatsApp number:`,
         `https://bloom-tune.lovable.app`,
       ].join("\n"),
@@ -1359,7 +1359,7 @@ async function interpretUnknown(
   if (!key) return null;
   const lang = userLang(profile, phone);
   const today = isoDate(new Date());
-  const system = `You are Mira, a warm WhatsApp fertility-tracking companion. A user sent a message the bot's parser did not recognize. Understand what they mean and respond.
+  const system = `You are My Cycle AI, a warm WhatsApp fertility-tracking companion. A user sent a message the bot's parser did not recognize. Understand what they mean and respond.
 
 Today's date is ${today} (ISO). The user's stored average cycle length is ${profile?.avg_cycle_length ?? 28} days and period length ${profile?.period_length ?? 5} days.
 

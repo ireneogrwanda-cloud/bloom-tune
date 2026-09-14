@@ -11,10 +11,10 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
-      { title: "Sign in with WhatsApp — Mira" },
-      { name: "description", content: "Sign in to Mira with your WhatsApp number and a one-time code." },
-      { property: "og:title", content: "Sign in with WhatsApp — Mira" },
-      { property: "og:description", content: "No password needed — Mira sends a one-time code to your WhatsApp." },
+      { title: "Sign in with WhatsApp — My Cycle AI" },
+      { name: "description", content: "Sign in to My Cycle AI with your WhatsApp number and a one-time code." },
+      { property: "og:title", content: "Sign in with WhatsApp — My Cycle AI" },
+      { property: "og:description", content: "No password needed — My Cycle AI sends a one-time code to your WhatsApp." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -63,7 +63,7 @@ export function WhatsAppOtpForm() {
       const { tokenHash, isNew } = await checkCode({ data: { phone, code } });
       const { error } = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: tokenHash });
       if (error) throw new Error(error.message);
-      toast.success(isNew ? "Welcome to Mira!" : "Welcome back");
+      toast.success(isNew ? "Welcome to My Cycle AI!" : "Welcome back");
       nav({ to: isNew ? "/onboarding" : "/dashboard" });
     } catch (e: any) {
       toast.error(e?.message ?? "Could not sign you in");
@@ -134,7 +134,7 @@ export function AuthShell({ title, subtitle, children }: { title: string; subtit
       <div className="container mx-auto flex max-w-md flex-col items-center px-6 py-10">
         <Link to="/" className="mb-8 flex items-center gap-2 font-semibold">
           <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-rose-500 text-white text-sm">M</span>
-          Mira
+          My Cycle AI
         </Link>
         <div className="w-full rounded-2xl border bg-card p-6 shadow-sm">
           <h1 className="text-xl font-semibold">{title}</h1>

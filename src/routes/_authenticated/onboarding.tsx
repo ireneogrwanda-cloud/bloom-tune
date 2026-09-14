@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/onboarding")({
-  head: () => ({ meta: [{ title: "Set up your profile — Mira" }] }),
+  head: () => ({ meta: [{ title: "Set up your profile — My Cycle AI" }] }),
   component: Onboarding,
 });
 
@@ -98,7 +98,7 @@ function Onboarding() {
 
         <label className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
           <Checkbox checked={agree} onCheckedChange={(v) => setAgree(v === true)} className="mt-0.5" />
-          <span>I understand Mira is <strong>not medical advice</strong> and <strong>not a contraceptive method</strong>.</span>
+          <span>I understand My Cycle AI is <strong>not medical advice</strong> and <strong>not a contraceptive method</strong>.</span>
         </label>
 
         <Button type="submit" disabled={loading} className="w-full">{loading ? "Saving…" : "Finish setup"}</Button>

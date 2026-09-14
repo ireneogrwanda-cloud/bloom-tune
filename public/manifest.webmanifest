@@ -1,6 +1,6 @@
 {
-  "name": "Mira — Fertility Chat",
-  "short_name": "Mira",
+  "name": "My Cycle AI — Fertility Chat",
+  "short_name": "My Cycle AI",
   "description": "Chat your daily temperature and know your fertile days.",
   "start_url": "/",
   "scope": "/",

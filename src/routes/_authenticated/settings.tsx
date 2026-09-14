@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/settings")({
-  head: () => ({ meta: [{ title: "Settings — Mira" }] }),
+  head: () => ({ meta: [{ title: "Settings — My Cycle AI" }] }),
   component: SettingsPage,
 });
 

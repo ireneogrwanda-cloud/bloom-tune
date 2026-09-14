@@ -50,7 +50,7 @@ export const requestWhatsAppCode = createServerFn({ method: "POST" })
 
     await sendWhatsAppText(
       `+${n}`,
-      `🔐 Your Mira login code is ${code}\n\nIt expires in 10 minutes. Never share this code with anyone.`,
+      `🔐 Your My Cycle AI login code is ${code}\n\nIt expires in 10 minutes. Never share this code with anyone.`,
     );
 
     return { ok: true, phone: n };
