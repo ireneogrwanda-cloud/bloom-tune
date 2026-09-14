@@ -790,7 +790,10 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
         "• Hard to use with *very irregular cycles* or shift-work sleep schedules.",
         "",
         "ℹ️ This bot helps you track fertility patterns.",
-
+        "",
+        "🌐 *Open Mira on the web*",
+        `View your charts, history and chat with me just like here on WhatsApp — sign in or create a free account with your WhatsApp number:`,
+        `https://bloom-tune.lovable.app`,
       ].join("\n"),
     );
     return;
