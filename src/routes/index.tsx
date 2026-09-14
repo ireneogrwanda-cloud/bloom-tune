@@ -4,6 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { getChatHistory, sendChatMessage, type ChatMessage } from "@/lib/chat.functions";
+import { getDashboard } from "@/lib/profile.functions";
+import { CycleChart } from "@/components/cycle-chart";
 import { Button } from "@/components/ui/button";
 import { useInstallPrompt } from "@/hooks/use-install-prompt";
 import {
@@ -20,6 +22,9 @@ import {
   Download,
   Share,
   ArrowDown,
+  LineChart as LineChartIcon,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -190,9 +195,11 @@ function ChatThread() {
   const qc = useQueryClient();
   const fetchHistory = useServerFn(getChatHistory);
   const send = useServerFn(sendChatMessage);
+  const fetchDash = useServerFn(getDashboard);
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const [atBottom, setAtBottom] = useState(true);
+  const [chartOpen, setChartOpen] = useState(true);
   const endRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -202,10 +209,16 @@ function ChatThread() {
     queryFn: () => fetchHistory({}),
   });
 
+  const { data: dash } = useQuery({
+    queryKey: ["dashboard"],
+    queryFn: () => fetchDash(),
+  });
+
   const mutation = useMutation({
     mutationFn: (text: string) => send({ data: { text } }),
     onSettled: async () => {
       await qc.invalidateQueries({ queryKey: ["chat-history"] });
+      await qc.invalidateQueries({ queryKey: ["dashboard"] });
       setPending(null);
     },
   });
@@ -238,6 +251,32 @@ function ChatThread() {
 
   return (
     <>
+      {dash?.profile?.whatsapp_number ? (
+        <div className="border-b bg-background/60" style={WALLPAPER_STYLE}>
+          <button
+            type="button"
+            onClick={() => setChartOpen((o) => !o)}
+            aria-expanded={chartOpen}
+            className="flex w-full items-center justify-between px-4 py-2 text-xs font-medium text-emerald-900"
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <LineChartIcon className="h-3.5 w-3.5" /> Your cycle chart
+            </span>
+            {chartOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+          {chartOpen ? (
+            <div className="px-3 pb-3">
+              <CycleChart
+                profile={dash.profile}
+                activeCycle={dash.activeCycle}
+                activeLogs={dash.activeLogs}
+                heightClass="h-56"
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div
         ref={scrollRef}
         onScroll={onScroll}
