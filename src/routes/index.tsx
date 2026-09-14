@@ -4,6 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { getChatHistory, sendChatMessage, type ChatMessage } from "@/lib/chat.functions";
+import { getDashboard } from "@/lib/profile.functions";
+import { CycleChart } from "@/components/cycle-chart";
 import { Button } from "@/components/ui/button";
 import { useInstallPrompt } from "@/hooks/use-install-prompt";
 import {
@@ -20,6 +22,9 @@ import {
   Download,
   Share,
   ArrowDown,
+  LineChart as LineChartIcon,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
