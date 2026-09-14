@@ -8,8 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { predictCycle, isoDate, type TempPoint } from "@/lib/fertility";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceArea, CartesianGrid } from "recharts";
-import { MessageCircle, ThermometerSun, RotateCcw } from "lucide-react";
+import { CycleChart } from "@/components/cycle-chart";
+import { MessageCircle, RotateCcw } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard — My Cycle AI" }] }),
@@ -66,29 +66,6 @@ function Dashboard() {
       })
     : null;
 
-  // Day classification for chart coloring:
-  //  - "fertile": inside predicted/confirmed fertile window → red
-  //  - "safe": confidently infertile (bleeding, or pre/post window with enough evidence) → green
-  //  - "uncertain": low-confidence pre-window or unclosed post-window → red (treat as fertile)
-  const preFertileConfirmed = stats ? stats.cyclesAnalyzed >= 3 : false;
-  const postFertileConfirmed = stats ? stats.fertileWindowClosed : false;
-  const temps = rawTemps.map((p) => {
-    let kind: "fertile" | "safe" | "uncertain" = "safe";
-    if (stats) {
-      if (p.day >= stats.fertileStartDay && p.day <= stats.fertileEndDay) kind = "fertile";
-      else if (p.day <= profile.period_length) kind = "safe";
-      else if (p.day < stats.fertileStartDay) kind = preFertileConfirmed ? "safe" : "uncertain";
-      else kind = postFertileConfirmed ? "safe" : "uncertain";
-    }
-    return { ...p, fertile: kind === "fertile", kind };
-  });
-
-  const maxLogDay = rawTemps.reduce((m, p) => Math.max(m, p.day), 0);
-  const minLogDay = rawTemps.reduce((m, p) => Math.min(m, p.day), 1);
-  const chartMaxDay = stats
-    ? Math.max(stats.predictedCycleLength, stats.fertileEndDay + 2, stats.cycleDay, maxLogDay)
-    : Math.max(profile.avg_cycle_length, maxLogDay, 1);
-  const chartMinDay = Math.min(1, minLogDay);
 
   async function onLog(e: React.FormEvent) {
     e.preventDefault();
