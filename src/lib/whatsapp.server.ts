@@ -44,6 +44,14 @@ export async function sendWhatsAppText(to: string, body: string) {
   return data;
 }
 
+// Fetch the current delivery status of a previously sent message.
+export async function getMessageStatus(sid: string) {
+  const res = await fetch(`${GATEWAY_URL}/Messages/${sid}.json`, { headers: gatewayHeaders() });
+  if (!res.ok) return null;
+  const data = (await res.json()) as { status?: string; error_code?: number | string | null };
+  return { status: data.status ?? null, errorCode: data.error_code ? Number(data.error_code) : null };
+}
+
 export async function sendWhatsAppImage(to: string, imageUrl: string, caption?: string) {
   const params = new URLSearchParams({
     To: toWa(to),
