@@ -64,12 +64,6 @@ export const MIN_RISE_C = 0.2;
 // between the first and third elevated reading don't invalidate detection.
 const GAP_TOLERANCE_DAYS = 5;
 
-function median(xs: number[]): number {
-  if (xs.length === 0) return 0;
-  const s = [...xs].sort((a, b) => a - b);
-  const mid = Math.floor(s.length / 2);
-  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
-}
 
 // ---------------------------------------------------------------------------
 // Temperature shift detection (shared by detectOvulation + confirmLutealPhase)
