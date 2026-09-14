@@ -63,18 +63,20 @@ export const requestWhatsAppCode = createServerFn({ method: "POST" })
         if (!st) break;
         if (st.status === "failed" || st.status === "undelivered") {
           await supabaseAdmin.from("wa_otp_codes").delete().eq("phone", n).is("consumed_at", null);
-          if (st.errorCode === 63015 || st.errorCode === 63016 || st.errorCode === 21211) {
-            throw new Error(
-              "WhatsApp would not deliver the code to this number yet. Open WhatsApp, send the join message to +1 415 523 8886 to connect with My Cycle AI, then try again.",
-            );
-          }
-          throw new Error("WhatsApp could not deliver the code to this number. Please check it and try again.");
+          const notJoined = st.errorCode === 63015 || st.errorCode === 63016 || st.errorCode === 21211;
+          return {
+            ok: false as const,
+            phone: n,
+            message: notJoined
+              ? "WhatsApp would not deliver the code to this number yet. Open WhatsApp, send the join message to +1 415 523 8886 to connect with My Cycle AI, then try again."
+              : "WhatsApp could not deliver the code to this number. Please check it and try again.",
+          };
         }
         if (st.status === "sent" || st.status === "delivered" || st.status === "read") break;
       }
     }
 
-    return { ok: true, phone: n };
+    return { ok: true as const, phone: n, message: "" };
   });
 
 export const verifyWhatsAppCode = createServerFn({ method: "POST" })
