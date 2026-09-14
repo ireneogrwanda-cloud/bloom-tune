@@ -692,10 +692,12 @@ export async function handleIncomingMessage(args: {
       return;
     }
     profile = updated;
-    const initialState = { awaiting_period_start: true };
+    const initialState = { awaiting_name: true, awaiting_period_start: true };
     await supabaseAdmin.from("profiles").update({ bot_state: initialState }).eq("id", profile.id);
     profile.bot_state = initialState;
     const welcome = `👋 Welcome! I've set up a new account for you.
+
+🙋 *First, what's your name?* Just reply with your name so I know what to call you.
 
 ℹ️ This bot helps you track fertility patterns.
 
