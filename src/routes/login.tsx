@@ -46,7 +46,11 @@ export function WhatsAppOtpForm() {
     }
     setLoading(true);
     try {
-      await sendCode({ data: { phone } });
+      const res = await sendCode({ data: { phone } });
+      if (!res.ok) {
+        toast.error(res.message);
+        return;
+      }
       toast.success("Code sent to your WhatsApp");
       setStep("code");
     } catch (e: any) {
