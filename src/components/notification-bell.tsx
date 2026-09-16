@@ -25,6 +25,7 @@ function timeAgo(iso: string) {
 
 export function NotificationBell({ tone = "light" }: { tone?: "light" | "dark" }) {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const fetchList = useServerFn(listNotifications);
   const markRead = useServerFn(markNotificationsRead);
   const saveToken = useServerFn(registerPushToken);
