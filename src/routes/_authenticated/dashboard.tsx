@@ -37,7 +37,10 @@ function Dashboard() {
   const { data, isLoading } = useQuery({ queryKey: ["dashboard"], queryFn: () => fetchDash() });
 
   const [temp, setTemp] = useState("");
+  const [sick, setSick] = useState(false);
+  const [disrupted, setDisrupted] = useState(false);
   const [pickedDate, setPickedDate] = useState<string | null>(null);
+
   // "Not yet" only hides the question for today — it comes back each day until
   // bleeding actually starts.
   const todayIso = isoDate(new Date());
