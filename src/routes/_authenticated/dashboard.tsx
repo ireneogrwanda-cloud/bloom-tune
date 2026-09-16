@@ -109,7 +109,7 @@ function Dashboard() {
       const res = await logViaBot({
         data: {
           loggedFor: pickedDate!,
-          tempCelsius: Math.round(t * 100) / 100,
+          tempCelsius: Math.round(value * 100) / 100,
           sick,
           disruptedMorning: disrupted,
         },
