@@ -136,7 +136,7 @@ function AuthLayout() {
           >
             <Link to="/assistant">
               <Bot className="h-5 w-5" />
-              <span className="hidden sm:inline">Ask AI</span>
+              <span className="hidden sm:inline">{t("Ask AI")}</span>
             </Link>
           </Button>
         </div>
@@ -145,7 +145,8 @@ function AuthLayout() {
       <main className="container mx-auto px-4 py-6"><Outlet /></main>
       <footer className="mt-12 border-t bg-muted/30">
         <div className="container mx-auto px-6 py-4 text-xs text-muted-foreground">
-          <strong>My Cycle AI is not medical advice and not a contraceptive method.</strong> Always consult a healthcare provider.
+          <strong>{t("My Cycle AI is not medical advice and not a contraceptive method.")}</strong>{" "}
+          {t("Always consult a healthcare provider.")}
         </div>
       </footer>
     </div>
