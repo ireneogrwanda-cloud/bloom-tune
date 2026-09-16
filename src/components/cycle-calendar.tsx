@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Egg } from "lucide-react";
+import { ChevronLeft, ChevronRight, Egg, Droplet } from "lucide-react";
 import { predictCycle, isoDate, type TempPoint } from "@/lib/fertility";
 import { classifyDay, cycleDayFor, DAY_STYLES } from "@/lib/day-colors";
 
@@ -95,6 +95,7 @@ export function CycleCalendar({ profile, activeCycle, activeLogs, onSelectDate }
               : "outside";
           const isToday = isoDate(today) === iso;
           const isOvulation = !!stats && day === stats.estimatedOvulationDay && day >= 1;
+          const isPredictedBleed = !!stats && day === stats.predictedCycleLength + 1;
           const temp = logMap.get(iso);
 
           return (
@@ -112,6 +113,9 @@ export function CycleCalendar({ profile, activeCycle, activeLogs, onSelectDate }
                 <span className="mt-0.5 text-[9px] leading-none opacity-80">d{day}</span>
               ) : null}
               {isOvulation ? <Egg className="absolute right-0.5 top-0.5 h-3 w-3 opacity-90" /> : null}
+              {isPredictedBleed ? (
+                <Droplet className="absolute right-0.5 top-0.5 h-3 w-3 fill-rose-500 text-rose-600" />
+              ) : null}
               {temp ? <span className="mt-0.5 text-[8px] leading-none opacity-80">{temp.toFixed(2)}</span> : null}
             </button>
           );
@@ -125,6 +129,9 @@ export function CycleCalendar({ profile, activeCycle, activeLogs, onSelectDate }
         <Legend className="bg-rose-200" label="Fertile — predicted" />
         <span className="inline-flex items-center gap-1">
           <Egg className="h-3 w-3" /> Ovulation day
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <Droplet className="h-3 w-3 fill-rose-500 text-rose-600" /> Expected bleeding · next cycle start
         </span>
       </div>
       <p className="mt-2 text-[11px] text-muted-foreground">
