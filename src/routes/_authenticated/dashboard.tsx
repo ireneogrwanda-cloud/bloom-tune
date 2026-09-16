@@ -124,7 +124,7 @@ function Dashboard() {
             WhatsApp: <span className="font-mono">+{profile.whatsapp_number}</span> · Avg cycle {profile.avg_cycle_length}d
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={onNewCycle}>
+        <Button variant="outline" size="sm" onClick={() => onNewCycle()}>
           <RotateCcw className="mr-1 h-4 w-4" /> New cycle
         </Button>
       </div>
@@ -136,7 +136,7 @@ function Dashboard() {
             You're on day {stats.cycleDay} — your period is expected around now. Are you bleeding today?
           </p>
           <div className="mt-3 flex gap-2">
-            <Button size="sm" onClick={onNewCycle}>Yes, I'm bleeding</Button>
+            <Button size="sm" onClick={() => onNewCycle({ skipConfirm: true })}>Yes, I'm bleeding</Button>
             <Button size="sm" variant="outline" onClick={() => setBleedAsked(true)}>Not yet</Button>
           </div>
         </section>
