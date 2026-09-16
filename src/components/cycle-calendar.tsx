@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Egg, Droplet } from "lucide-react";
 import { predictCycle, isoDate, type TempPoint } from "@/lib/fertility";
 import { classifyDay, cycleDayFor, DAY_STYLES } from "@/lib/day-colors";
+import { useT } from "@/lib/i18n";
 
 export type CalendarProfile = { avg_cycle_length: number; period_length: number };
 
@@ -16,6 +17,7 @@ const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
 export function CycleCalendar({ profile, activeCycle, activeLogs, onSelectDate }: CycleCalendarProps) {
   const today = new Date();
+  const { t } = useT();
   const [month, setMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
 
   const cycleStart = activeCycle ? new Date(activeCycle.started_on) : null;
@@ -131,10 +133,10 @@ export function CycleCalendar({ profile, activeCycle, activeLogs, onSelectDate }
       </div>
 
       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
-        <Legend className="bg-emerald-600" label="Infertile — confirmed" />
-        <Legend className="bg-emerald-100" label="Infertile — predicted" />
-        <Legend className="bg-rose-600" label="Fertile — confirmed" />
-        <Legend className="bg-rose-200" label="Fertile — predicted" />
+        <Legend className="bg-emerald-600" label={t("Infertile — confirmed")} />
+        <Legend className="bg-emerald-100" label={t("Infertile — predicted")} />
+        <Legend className="bg-rose-600" label={t("Fertile — confirmed")} />
+        <Legend className="bg-rose-200" label={t("Fertile — predicted")} />
         <span className="inline-flex items-center gap-1">
           <Egg className="h-3 w-3" /> Ovulation day
         </span>

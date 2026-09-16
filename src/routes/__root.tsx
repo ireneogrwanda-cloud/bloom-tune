@@ -10,6 +10,7 @@ import {
 import { Toaster } from "sonner";
 import { useEffect } from "react";
 import { registerServiceWorker } from "@/lib/register-sw";
+import { LanguageProvider } from "@/lib/i18n";
 
 import appCss from "../styles.css?url";
 
@@ -132,8 +133,10 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <Outlet />
-      <Toaster richColors position="top-center" />
+      <LanguageProvider>
+        <Outlet />
+        <Toaster richColors position="top-center" />
+      </LanguageProvider>
     </QueryClientProvider>
   );
 }

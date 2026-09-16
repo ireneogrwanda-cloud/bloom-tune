@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { getDashboard } from "@/lib/profile.functions";
 import { CycleChart } from "@/components/cycle-chart";
+import { useT } from "@/lib/i18n";
 
 export const Route = createFileRoute("/_authenticated/history")({
   head: () => ({
@@ -20,25 +21,26 @@ export const Route = createFileRoute("/_authenticated/history")({
 
 function HistoryPage() {
   const fetchDash = useServerFn(getDashboard);
+  const { t } = useT();
   const { data, isLoading } = useQuery({ queryKey: ["dashboard"], queryFn: () => fetchDash() });
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
-  if (!data?.profile) return <p className="text-sm text-muted-foreground">Nothing tracked yet.</p>;
+  if (isLoading) return <p className="text-sm text-muted-foreground">{t("Loading…")}</p>;
+  if (!data?.profile) return <p className="text-sm text-muted-foreground">{t("Nothing tracked yet.")}</p>;
 
   const logs = [...data.activeLogs].sort((a: any, b: any) => (a.logged_for < b.logged_for ? 1 : -1));
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <h1 className="text-2xl font-bold">History</h1>
+      <h1 className="text-2xl font-bold">{t("History")}</h1>
 
       {data.activeCycle ? (
         <CycleChart profile={data.profile} activeCycle={data.activeCycle} activeLogs={data.activeLogs} />
       ) : null}
 
       <section>
-        <h2 className="mb-2 font-semibold">Cycles</h2>
+        <h2 className="mb-2 font-semibold">{t("Cycles")}</h2>
         <div className="divide-y rounded-2xl border bg-card">
-          {data.cycles.length === 0 && <p className="p-5 text-sm text-muted-foreground">No cycles recorded yet.</p>}
+          {data.cycles.length === 0 && <p className="p-5 text-sm text-muted-foreground">{t("No cycles recorded yet.")}</p>}
           {data.cycles.map((c: any) => {
             const start = new Date(c.started_on);
             const end = c.ended_on ? new Date(c.ended_on) : null;
@@ -50,8 +52,8 @@ function HistoryPage() {
                     {c.started_on} {c.ended_on ? `→ ${c.ended_on}` : "(active)"}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {length ? `${length} days` : "In progress"}
-                    {c.ovulation_day ? ` · ovulation day ${c.ovulation_day}` : ""}
+                    {length ? `${length} ${t("days")}` : t("In progress")}
+                    {c.ovulation_day ? ` · ${t("ovulation day")} ${c.ovulation_day}` : ""}
                   </p>
                 </div>
                 <span
@@ -68,9 +70,9 @@ function HistoryPage() {
       </section>
 
       <section>
-        <h2 className="mb-2 font-semibold">Temperature readings (current cycle)</h2>
+        <h2 className="mb-2 font-semibold">{t("Temperature readings (current cycle)")}</h2>
         <div className="divide-y rounded-2xl border bg-card">
-          {logs.length === 0 && <p className="p-5 text-sm text-muted-foreground">No readings logged yet.</p>}
+          {logs.length === 0 && <p className="p-5 text-sm text-muted-foreground">{t("No readings logged yet.")}</p>}
           {logs.map((l: any) => (
             <div key={l.id ?? l.logged_for} className="flex items-center justify-between p-3 text-sm">
               <span>{l.logged_for}</span>

@@ -15,6 +15,7 @@ import { predictCycle, isoDate, type TempPoint } from "@/lib/fertility";
 import { CycleChart } from "@/components/cycle-chart";
 import { CycleCalendar } from "@/components/cycle-calendar";
 import { RotateCcw } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -35,6 +36,7 @@ function Dashboard() {
   const logViaBot = useServerFn(logTemperatureViaBot);
   const newCycle = useServerFn(startNewCycle);
   const qc = useQueryClient();
+  const { t } = useT();
 
   const { data, isLoading } = useQuery({ queryKey: ["dashboard"], queryFn: () => fetchDash() });
 
@@ -56,15 +58,15 @@ function Dashboard() {
     setBleedDismissed(todayIso);
   }
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
-  if (!data) return <p>Failed to load.</p>;
+  if (isLoading) return <p className="text-sm text-muted-foreground">{t("Loading…")}</p>;
+  if (!data) return <p>{t("Failed to load.")}</p>;
 
   if (!data.profile?.whatsapp_number) {
     return (
       <div className="rounded-2xl border bg-card p-8 text-center">
-        <h2 className="text-xl font-semibold">Finish setting up</h2>
-        <p className="mt-2 text-muted-foreground">Add your WhatsApp number and cycle info to get started.</p>
-        <Button asChild className="mt-4"><Link to="/onboarding">Continue setup</Link></Button>
+        <h2 className="text-xl font-semibold">{t("Finish setting up")}</h2>
+        <p className="mt-2 text-muted-foreground">{t("Add your WhatsApp number and cycle info to get started.")}</p>
+        <Button asChild className="mt-4"><Link to="/onboarding">{t("Continue setup")}</Link></Button>
       </div>
     );
   }
@@ -90,7 +92,7 @@ function Dashboard() {
     : null;
 
   function openDay(iso: string) {
-    if (iso > todayIso) return toast.error("You can't log a temperature for a future day.");
+    if (iso > todayIso) return toast.error(t("You can't log a temperature for a future day."));
     const existing = data!.activeLogs.find((l: any) => l.logged_for === iso);
     setTemp(existing ? Number(existing.temp_celsius).toFixed(2) : "");
     setSick(false);
@@ -100,18 +102,19 @@ function Dashboard() {
 
   async function saveTemp(e: React.FormEvent) {
     e.preventDefault();
-    const t = parseFloat(temp);
-    if (!isFinite(t) || t < 35 || t > 38) return toast.error("Enter a temperature between 35.00 and 38.00°C");
+    const value = parseFloat(temp);
+    if (!isFinite(value) || value < 35 || value > 38)
+      return toast.error(t("Enter a temperature between 35.00 and 38.00°C"));
     try {
       const res = await logViaBot({
         data: {
           loggedFor: pickedDate!,
-          tempCelsius: Math.round(t * 100) / 100,
+          tempCelsius: Math.round(value * 100) / 100,
           sick,
           disruptedMorning: disrupted,
         },
       });
-      toast.success(res?.note ? "Logged — note sent to your chat" : "Logged");
+      toast.success(t(res?.note ? "Logged — note sent to your chat" : "Logged"));
       setPickedDate(null);
       setTemp("");
       setSick(false);
@@ -126,10 +129,10 @@ function Dashboard() {
 
 
   async function onNewCycle(opts?: { skipConfirm?: boolean }) {
-    if (!opts?.skipConfirm && !confirm("Start a new cycle today? Your current cycle will be closed.")) return;
+    if (!opts?.skipConfirm && !confirm(t("Start a new cycle today? Your current cycle will be closed."))) return;
     try {
       await newCycle({ data: { startedOn: isoDate(new Date()) } });
-      toast.success("New cycle started");
+      toast.success(t("New cycle started"));
       qc.invalidateQueries({ queryKey: ["dashboard"] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed");
@@ -140,25 +143,25 @@ function Dashboard() {
     <div className="mx-auto max-w-3xl space-y-6">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Hi {profile.display_name?.split(" ")[0]}</h1>
+          <h1 className="text-2xl font-bold">{t("Hi")} {profile.display_name?.split(" ")[0]}</h1>
           <p className="text-sm text-muted-foreground">
-            WhatsApp: <span className="font-mono">+{profile.whatsapp_number}</span> · Avg cycle {profile.avg_cycle_length}d
+            WhatsApp: <span className="font-mono">+{profile.whatsapp_number}</span> · {t("Avg cycle")} {profile.avg_cycle_length}d
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => onNewCycle()}>
-          <RotateCcw className="mr-1 h-4 w-4" /> New cycle
+          <RotateCcw className="mr-1 h-4 w-4" /> {t("New cycle")}
         </Button>
       </div>
 
       {stats && stats.cycleDay >= stats.predictedCycleLength + 1 && !bleedAsked && (
         <section className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-rose-900">
-          <h2 className="font-semibold">Has your period started?</h2>
+          <h2 className="font-semibold">{t("Has your period started?")}</h2>
           <p className="mt-1 text-sm">
-            You're on day {stats.cycleDay} — your period is expected around now. Are you bleeding today?
+            {t("You're on day")} {stats.cycleDay} — {t("your period is expected around now. Are you bleeding today?")}
           </p>
           <div className="mt-3 flex gap-2">
-            <Button size="sm" onClick={() => onNewCycle({ skipConfirm: true })}>Yes, I'm bleeding</Button>
-            <Button size="sm" variant="outline" onClick={() => setBleedAsked(true)}>Not yet</Button>
+            <Button size="sm" onClick={() => onNewCycle({ skipConfirm: true })}>{t("Yes, I'm bleeding")}</Button>
+            <Button size="sm" variant="outline" onClick={() => setBleedAsked(true)}>{t("Not yet")}</Button>
           </div>
         </section>
       )}
@@ -172,22 +175,22 @@ function Dashboard() {
 
       {stats && activeCycle && (
         <div className="grid grid-cols-3 gap-2 sm:gap-3">
-          <StatCard label="Cycle day" value={String(stats.cycleDay)} sub={`Started ${activeCycle.started_on}`} />
+          <StatCard label={t("Cycle day")} value={String(stats.cycleDay)} sub={`${t("Started")} ${activeCycle.started_on}`} />
           <StatCard
-            label="Status"
-            value={stats.status === "fertile" || stats.status === "ovulation" ? "Fertile 🌱" : stats.status === "early-cycle" ? "Early cycle 🩸" : "Low"}
-            sub={stats.message}
+            label={t("Status")}
+            value={t(stats.status === "fertile" || stats.status === "ovulation" ? "Fertile 🌱" : stats.status === "early-cycle" ? "Early cycle 🩸" : "Low")}
+            sub={t(stats.message)}
           />
           <StatCard
-            label="Ovulation"
+            label={t("Ovulation")}
             value={
               stats.ovulationConfirmed
-                ? `Day ${stats.estimatedOvulationDay}`
+                ? `${t("Day")} ${stats.estimatedOvulationDay}`
                 : stats.ovulationDayMin === stats.ovulationDayMax
-                  ? `~Day ${stats.estimatedOvulationDay}`
-                  : `Days ${stats.ovulationDayMin}–${stats.ovulationDayMax}`
+                  ? `~${t("Day")} ${stats.estimatedOvulationDay}`
+                  : `${t("Days")} ${stats.ovulationDayMin}–${stats.ovulationDayMax}`
             }
-            sub={stats.ovulationConfirmed ? "Confirmed by BBT (3-over-6)" : `Estimated range · fertile window days ${stats.fertileStartDay}–${stats.fertileEndDay}`}
+            sub={stats.ovulationConfirmed ? t("Confirmed by BBT (3-over-6)") : `${t("Estimated range · fertile window days")} ${stats.fertileStartDay}–${stats.fertileEndDay}`}
           />
         </div>
       )}
@@ -204,25 +207,25 @@ function Dashboard() {
             : "—";
         const mostFertileDay = stats
           ? stats.ovulationConfirmed
-            ? `Day ${stats.estimatedOvulationDay}`
+            ? `${t("Day")} ${stats.estimatedOvulationDay}`
             : stats.ovulationDayMin === stats.ovulationDayMax
-              ? `~Day ${stats.estimatedOvulationDay}`
-              : `Days ${stats.ovulationDayMin}–${stats.ovulationDayMax}`
+              ? `~${t("Day")} ${stats.estimatedOvulationDay}`
+              : `${t("Days")} ${stats.ovulationDayMin}–${stats.ovulationDayMax}`
           : "—";
         return (
           <section className="rounded-2xl border bg-card p-5">
-            <h2 className="mb-3 font-semibold">Monthly summary</h2>
+            <h2 className="mb-3 font-semibold">{t("Monthly summary")}</h2>
             <div className="grid grid-cols-3 gap-3 text-center">
               <div className="rounded-xl bg-muted/40 px-3 py-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Avg. temperature</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("Avg. temperature")}</p>
                 <p className="mt-1 text-xl font-bold">{avgTemp}{avgTemp !== "—" ? "°C" : ""}</p>
               </div>
               <div className="rounded-xl bg-muted/40 px-3 py-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Most fertile day</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("Most fertile day")}</p>
                 <p className="mt-1 text-xl font-bold">{mostFertileDay}</p>
               </div>
               <div className="rounded-xl bg-muted/40 px-3 py-4">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Days logged</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("Days logged")}</p>
                 <p className="mt-1 text-xl font-bold">{totalLoggedDays}</p>
               </div>
             </div>
@@ -233,14 +236,14 @@ function Dashboard() {
       <Dialog open={!!pickedDate} onOpenChange={(o) => !o && setPickedDate(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Morning temperature</DialogTitle>
+            <DialogTitle>{t("Morning temperature")}</DialogTitle>
             <DialogDescription>
               {pickedDate ? new Date(pickedDate).toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" }) : ""}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={saveTemp} className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="t">Temperature (°C)</Label>
+              <Label htmlFor="t">{t("Temperature (°C)")}</Label>
               <Input
                 id="t"
                 type="number"
@@ -259,29 +262,29 @@ function Dashboard() {
             <div className="space-y-3 rounded-xl border bg-muted/30 p-3">
               {parseFloat(temp) >= 37.5 ? (
                 <p className="text-xs text-rose-700">
-                  That reading is at or above normal body temperature — it looks unusual.
+                  {t("That reading is at or above normal body temperature — it looks unusual.")}
                 </p>
               ) : null}
               <div className="flex items-start justify-between gap-3">
                 <Label htmlFor="sick" className="text-xs font-normal leading-snug">
-                  I have a fever or feel sick
+                  {t("I have a fever or feel sick")}
                 </Label>
                 <Switch id="sick" checked={sick} onCheckedChange={setSick} />
               </div>
               <div className="flex items-start justify-between gap-3">
                 <Label htmlFor="disrupted" className="text-xs font-normal leading-snug">
-                  Slept less than 3 hours, woke up much later than usual, or drank alcohol
+                  {t("Slept less than 3 hours, woke up much later than usual, or drank alcohol")}
                 </Label>
                 <Switch id="disrupted" checked={disrupted} onCheckedChange={setDisrupted} />
               </div>
               {sick || disrupted ? (
                 <p className="text-xs text-muted-foreground">
-                  This reading will be saved as a note only and left out of your fertility calculations.
+                  {t("This reading will be saved as a note only and left out of your fertility calculations.")}
                 </p>
               ) : null}
             </div>
 
-            <Button type="submit" className="w-full">Save</Button>
+            <Button type="submit" className="w-full">{t("Save")}</Button>
 
           </form>
         </DialogContent>
