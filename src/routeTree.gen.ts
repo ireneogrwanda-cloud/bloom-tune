@@ -16,7 +16,9 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as AuthenticatedHowItWorksRouteImport } from './routes/_authenticated/how-it-works'
+import { Route as AuthenticatedFertilityRouteImport } from './routes/_authenticated/fertility'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedAssistantRouteImport } from './routes/_authenticated/assistant'
 import { Route as ApiPublicWhatsappWebhookRouteImport } from './routes/api/public/whatsapp/webhook'
 import { Route as ApiPublicHooksLogRemindersRouteImport } from './routes/api/public/hooks/log-reminders'
 
@@ -54,9 +56,19 @@ const AuthenticatedHowItWorksRoute = AuthenticatedHowItWorksRouteImport.update({
   path: '/how-it-works',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedFertilityRoute = AuthenticatedFertilityRouteImport.update({
+  id: '/fertility',
+  path: '/fertility',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedAssistantRoute = AuthenticatedAssistantRouteImport.update({
+  id: '/assistant',
+  path: '/assistant',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const ApiPublicWhatsappWebhookRoute =
@@ -76,7 +88,9 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
+  '/assistant': typeof AuthenticatedAssistantRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/fertility': typeof AuthenticatedFertilityRoute
   '/how-it-works': typeof AuthenticatedHowItWorksRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -87,7 +101,9 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
+  '/assistant': typeof AuthenticatedAssistantRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/fertility': typeof AuthenticatedFertilityRoute
   '/how-it-works': typeof AuthenticatedHowItWorksRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -100,7 +116,9 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
+  '/_authenticated/assistant': typeof AuthenticatedAssistantRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/fertility': typeof AuthenticatedFertilityRoute
   '/_authenticated/how-it-works': typeof AuthenticatedHowItWorksRoute
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
@@ -113,7 +131,9 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/signup'
+    | '/assistant'
     | '/dashboard'
+    | '/fertility'
     | '/how-it-works'
     | '/onboarding'
     | '/settings'
@@ -124,7 +144,9 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/signup'
+    | '/assistant'
     | '/dashboard'
+    | '/fertility'
     | '/how-it-works'
     | '/onboarding'
     | '/settings'
@@ -136,7 +158,9 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/login'
     | '/signup'
+    | '/_authenticated/assistant'
     | '/_authenticated/dashboard'
+    | '/_authenticated/fertility'
     | '/_authenticated/how-it-works'
     | '/_authenticated/onboarding'
     | '/_authenticated/settings'
@@ -204,11 +228,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedHowItWorksRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/fertility': {
+      id: '/_authenticated/fertility'
+      path: '/fertility'
+      fullPath: '/fertility'
+      preLoaderRoute: typeof AuthenticatedFertilityRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/dashboard': {
       id: '/_authenticated/dashboard'
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/assistant': {
+      id: '/_authenticated/assistant'
+      path: '/assistant'
+      fullPath: '/assistant'
+      preLoaderRoute: typeof AuthenticatedAssistantRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/api/public/whatsapp/webhook': {
@@ -229,14 +267,18 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteChildren {
+  AuthenticatedAssistantRoute: typeof AuthenticatedAssistantRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedFertilityRoute: typeof AuthenticatedFertilityRoute
   AuthenticatedHowItWorksRoute: typeof AuthenticatedHowItWorksRoute
   AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedAssistantRoute: AuthenticatedAssistantRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedFertilityRoute: AuthenticatedFertilityRoute,
   AuthenticatedHowItWorksRoute: AuthenticatedHowItWorksRoute,
   AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
