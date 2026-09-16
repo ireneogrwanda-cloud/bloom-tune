@@ -32,6 +32,8 @@ const MENU = [
 function AuthLayout() {
   const nav = useNavigate();
   const [open, setOpen] = useState(false);
+  const { t, lang, setLang } = useT();
+  const saveLang = useServerFn(setAppLanguage);
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
