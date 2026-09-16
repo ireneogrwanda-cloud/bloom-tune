@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useT } from "@/lib/i18n";
 
 export const Route = createFileRoute("/_authenticated/fertility")({
   head: () => ({
@@ -45,21 +46,21 @@ const SECTIONS = [
 ];
 
 function FertilityPage() {
+  const { t } = useT();
   return (
     <article className="mx-auto max-w-2xl space-y-4">
-      <h1 className="text-2xl font-bold">Fertility explained</h1>
+      <h1 className="text-2xl font-bold">{t("Fertility explained")}</h1>
       <p className="text-sm text-muted-foreground">
-        A short guide to what each phase means and what the colours on your calendar tell you.
+        {t("A short guide to what each phase means and what the colours on your calendar tell you.")}
       </p>
       {SECTIONS.map((s) => (
         <section key={s.title} className="rounded-2xl border bg-card p-5">
-          <h2 className="font-semibold">{s.title}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{s.body}</p>
+          <h2 className="font-semibold">{t(s.title)}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t(s.body)}</p>
         </section>
       ))}
       <p className="text-xs text-muted-foreground">
-        Predictions can change with every new daily temperature. Take your temperature first thing in the morning,
-        before getting out of bed, at roughly the same time each day.
+        {t("Predictions can change with every new daily temperature. Take your temperature first thing in the morning, before getting out of bed, at roughly the same time each day.")}
       </p>
     </article>
   );

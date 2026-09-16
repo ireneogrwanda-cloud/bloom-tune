@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { getChatHistory, sendChatMessage, type ChatMessage } from "@/lib/chat.functions";
 import { Button } from "@/components/ui/button";
 import { Send, Smile, Paperclip, Check, CheckCheck, Clock, ArrowDown } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 const WALLPAPER_STYLE = {
   backgroundImage:
@@ -26,6 +27,7 @@ function dayLabel(iso: string) {
 
 export function ChatPanel() {
   const qc = useQueryClient();
+  const { t } = useT();
   const fetchHistory = useServerFn(getChatHistory);
   const send = useServerFn(sendChatMessage);
   const [draft, setDraft] = useState("");
@@ -84,7 +86,7 @@ export function ChatPanel() {
         style={WALLPAPER_STYLE}
       >
         {isLoading ? (
-          <p className="py-10 text-center text-xs text-muted-foreground">Loading your conversation…</p>
+          <p className="py-10 text-center text-xs text-muted-foreground">{t("Loading your conversation…")}</p>
         ) : messages.length === 0 ? (
           <Bubble side="left">
             👋 Ask me anything about your cycle, your fertile days or how this app works — or send your morning
@@ -124,7 +126,7 @@ export function ChatPanel() {
         ) : null}
         {mutation.isError ? (
           <Bubble side="left">
-            <span className="text-destructive">Something went wrong sending that. Please try again.</span>
+            <span className="text-destructive">{t("Something went wrong sending that. Please try again.")}</span>
           </Bubble>
         ) : null}
         <div ref={endRef} />
@@ -153,7 +155,7 @@ export function ChatPanel() {
               disabled={mutation.isPending}
               className="shrink-0 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium capitalize text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
             >
-              {q}
+              {t(q)}
             </button>
           ))}
         </div>
@@ -171,7 +173,7 @@ export function ChatPanel() {
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               maxLength={500}
-              placeholder="Ask a question, or send 36.52"
+              placeholder={t("Ask a question, or send 36.52")}
               aria-label="Message My Cycle AI"
               className="min-w-0 flex-1 bg-transparent text-sm outline-none"
             />

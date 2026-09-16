@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ChatPanel } from "@/components/chat-panel";
+import { useT } from "@/lib/i18n";
 
 export const Route = createFileRoute("/_authenticated/assistant")({
   head: () => ({
@@ -16,9 +17,10 @@ export const Route = createFileRoute("/_authenticated/assistant")({
 });
 
 function AssistantPage() {
+  const { t } = useT();
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="mb-3 text-xl font-bold">Ask My Cycle AI</h1>
+      <h1 className="mb-3 text-xl font-bold">{t("Ask My Cycle AI")}</h1>
       <div className="h-[70vh] overflow-hidden rounded-2xl border bg-card shadow-sm">
         <ChatPanel />
       </div>
