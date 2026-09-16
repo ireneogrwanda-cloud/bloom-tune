@@ -2,7 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getDashboard, logTemperature, startNewCycle } from "@/lib/profile.functions";
+import { getDashboard, startNewCycle } from "@/lib/profile.functions";
+import { logTemperatureViaBot } from "@/lib/chat.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,7 +30,7 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 
 function Dashboard() {
   const fetchDash = useServerFn(getDashboard);
-  const logTemp = useServerFn(logTemperature);
+  const logViaBot = useServerFn(logTemperatureViaBot);
   const newCycle = useServerFn(startNewCycle);
   const qc = useQueryClient();
 
@@ -94,11 +95,13 @@ function Dashboard() {
     const t = parseFloat(temp);
     if (!isFinite(t) || t < 35 || t > 38) return toast.error("Enter a temperature between 35.00 and 38.00°C");
     try {
-      await logTemp({ data: { loggedFor: pickedDate!, tempCelsius: Math.round(t * 100) / 100 } });
-      toast.success("Logged");
+      const res = await logViaBot({ data: { loggedFor: pickedDate!, tempCelsius: Math.round(t * 100) / 100 } });
+      toast.success(res?.note ? "Logged — note sent to your chat" : "Logged");
       setPickedDate(null);
       setTemp("");
       qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+      qc.invalidateQueries({ queryKey: ["chat"] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed");
     }

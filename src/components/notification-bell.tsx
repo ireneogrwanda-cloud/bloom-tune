@@ -115,12 +115,20 @@ export function NotificationBell({ tone = "light" }: { tone?: "light" | "dark" }
             <li className="px-4 py-8 text-center text-sm text-muted-foreground">Nothing yet — your alerts will appear here.</li>
           ) : (
             items.map((n) => (
-              <li key={n.id} className={`px-4 py-3 ${n.read_at ? "" : "bg-emerald-50/60"}`}>
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-medium leading-tight">{n.title}</p>
-                  <span className="shrink-0 text-[10px] text-muted-foreground">{timeAgo(n.created_at)}</span>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">{n.body}</p>
+              <li key={n.id} className={n.read_at ? "" : "bg-accent/30"}>
+                <button
+                  className="w-full px-4 py-3 text-left transition hover:bg-muted"
+                  onClick={() => {
+                    setOpen(false);
+                    void navigate({ to: "/assistant" });
+                  }}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium leading-tight">{n.title}</p>
+                    <span className="shrink-0 text-[10px] text-muted-foreground">{timeAgo(n.created_at)}</span>
+                  </div>
+                  <p className="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">{n.body}</p>
+                </button>
               </li>
             ))
           )}
