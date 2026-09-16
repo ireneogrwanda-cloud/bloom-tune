@@ -97,17 +97,25 @@ export function CycleCalendar({ profile, activeCycle, activeLogs, onSelectDate }
           const isOvulation = !!stats && day === stats.estimatedOvulationDay && day >= 1;
           const isPredictedBleed = !!stats && day === stats.predictedCycleLength + 1;
           const temp = logMap.get(iso);
+          // A temperature can only exist for a day that has happened.
+          const isFuture = iso > isoDate(today);
 
           return (
             <button
               key={iso}
               type="button"
+              disabled={isFuture}
               onClick={() => onSelectDate(iso)}
-              aria-label={`${d.toLocaleDateString()} — tap to add temperature`}
+              aria-label={
+                isFuture
+                  ? `${d.toLocaleDateString()} — future day`
+                  : `${d.toLocaleDateString()} — tap to add temperature`
+              }
               className={`relative flex aspect-square flex-col items-center justify-center rounded-xl text-xs transition-transform active:scale-95 ${DAY_STYLES[kind]} ${
                 isToday ? "ring-2 ring-primary ring-offset-1 ring-offset-card" : ""
-              }`}
+              } ${isFuture ? "cursor-not-allowed opacity-40" : ""}`}
             >
+
               <span className="font-semibold leading-none">{d.getDate()}</span>
               {day >= 1 && kind !== "outside" ? (
                 <span className="mt-0.5 text-[9px] leading-none opacity-80">d{day}</span>
