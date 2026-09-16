@@ -119,6 +119,7 @@ function ChatHeader({ authed }: { authed: boolean | null }) {
         <p className="truncate text-xs text-emerald-100/90">fertility assistant · online</p>
       </div>
       <div className="flex items-center gap-1 opacity-90">
+        {authed ? <NotificationBell tone="dark" /> : null}
         <Video className="h-5 w-5" />
         <Phone className="h-5 w-5" />
         <MoreVertical className="h-5 w-5" />
