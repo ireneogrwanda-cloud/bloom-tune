@@ -68,11 +68,18 @@ export const logTemperatureViaBot = createServerFn({ method: "POST" })
       .object({
         loggedFor: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
         tempCelsius: z.number().min(35).max(38),
+        // Answers to the "does this reading count?" questions asked in the app.
+        sick: z.boolean().optional(),
+        disruptedMorning: z.boolean().optional(),
       })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    const todayIso = new Date().toISOString().slice(0, 10);
+    if (data.loggedFor > todayIso) {
+      throw new Error("You can only log a temperature for today or an earlier day.");
+    }
     const { data: profile } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
     if (!profile) throw new Error("Profile not found");
 
@@ -91,7 +98,13 @@ export const logTemperatureViaBot = createServerFn({ method: "POST" })
       if (day >= 1) text = `d${day} ${data.tempCelsius.toFixed(2)}`;
     }
 
-    const { handleIncomingMessage } = await import("./bot.server");
+    const { handleIncomingMessage, prepareWebTempFlags } = await import("./bot.server");
+    // The toggles answer the bot's fever / morning questions up front, so the
+    // algorithm decides straight away instead of asking again in the chat.
+    const botState = await prepareWebTempFlags(profile, data.loggedFor, {
+      sick: !!data.sick,
+      disrupted: !!data.disruptedMorning,
+    });
     const capture: { text?: string; imageUrl?: string }[] = [];
     await handleIncomingMessage({
       from: profile.whatsapp_number ? `+${profile.whatsapp_number}` : "+00000000000",
@@ -99,8 +112,9 @@ export const logTemperatureViaBot = createServerFn({ method: "POST" })
       text,
       raw: { source: "web-dashboard" },
       capture,
-      profileOverride: profile,
+      profileOverride: { ...profile, bot_state: botState },
     });
+
 
     const note = capture.map((m) => m.text).filter(Boolean).join("\n\n").trim();
     if (note) {

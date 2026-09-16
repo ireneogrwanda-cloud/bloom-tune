@@ -7,6 +7,8 @@ import { logTemperatureViaBot } from "@/lib/chat.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { predictCycle, isoDate, type TempPoint } from "@/lib/fertility";
@@ -37,7 +39,10 @@ function Dashboard() {
   const { data, isLoading } = useQuery({ queryKey: ["dashboard"], queryFn: () => fetchDash() });
 
   const [temp, setTemp] = useState("");
+  const [sick, setSick] = useState(false);
+  const [disrupted, setDisrupted] = useState(false);
   const [pickedDate, setPickedDate] = useState<string | null>(null);
+
   // "Not yet" only hides the question for today — it comes back each day until
   // bleeding actually starts.
   const todayIso = isoDate(new Date());
@@ -85,8 +90,11 @@ function Dashboard() {
     : null;
 
   function openDay(iso: string) {
+    if (iso > todayIso) return toast.error("You can't log a temperature for a future day.");
     const existing = data!.activeLogs.find((l: any) => l.logged_for === iso);
     setTemp(existing ? Number(existing.temp_celsius).toFixed(2) : "");
+    setSick(false);
+    setDisrupted(false);
     setPickedDate(iso);
   }
 
@@ -95,17 +103,27 @@ function Dashboard() {
     const t = parseFloat(temp);
     if (!isFinite(t) || t < 35 || t > 38) return toast.error("Enter a temperature between 35.00 and 38.00°C");
     try {
-      const res = await logViaBot({ data: { loggedFor: pickedDate!, tempCelsius: Math.round(t * 100) / 100 } });
+      const res = await logViaBot({
+        data: {
+          loggedFor: pickedDate!,
+          tempCelsius: Math.round(t * 100) / 100,
+          sick,
+          disruptedMorning: disrupted,
+        },
+      });
       toast.success(res?.note ? "Logged — note sent to your chat" : "Logged");
       setPickedDate(null);
       setTemp("");
+      setSick(false);
+      setDisrupted(false);
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["notifications"] });
-      qc.invalidateQueries({ queryKey: ["chat"] });
+      qc.invalidateQueries({ queryKey: ["chat-history"] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed");
     }
   }
+
 
   async function onNewCycle(opts?: { skipConfirm?: boolean }) {
     if (!opts?.skipConfirm && !confirm("Start a new cycle today? Your current cycle will be closed.")) return;
@@ -235,7 +253,36 @@ function Dashboard() {
                 onChange={(e) => setTemp(e.target.value)}
               />
             </div>
+
+            {/* A reading only counts if the morning was normal. These answers
+                let the algorithm decide straight away. */}
+            <div className="space-y-3 rounded-xl border bg-muted/30 p-3">
+              {parseFloat(temp) >= 37.5 ? (
+                <p className="text-xs text-rose-700">
+                  That reading is at or above normal body temperature — it looks unusual.
+                </p>
+              ) : null}
+              <div className="flex items-start justify-between gap-3">
+                <Label htmlFor="sick" className="text-xs font-normal leading-snug">
+                  I have a fever or feel sick
+                </Label>
+                <Switch id="sick" checked={sick} onCheckedChange={setSick} />
+              </div>
+              <div className="flex items-start justify-between gap-3">
+                <Label htmlFor="disrupted" className="text-xs font-normal leading-snug">
+                  Slept less than 3 hours, woke up much later than usual, or drank alcohol
+                </Label>
+                <Switch id="disrupted" checked={disrupted} onCheckedChange={setDisrupted} />
+              </div>
+              {sick || disrupted ? (
+                <p className="text-xs text-muted-foreground">
+                  This reading will be saved as a note only and left out of your fertility calculations.
+                </p>
+              ) : null}
+            </div>
+
             <Button type="submit" className="w-full">Save</Button>
+
           </form>
         </DialogContent>
       </Dialog>

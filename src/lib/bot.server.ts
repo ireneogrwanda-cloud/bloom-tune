@@ -1012,13 +1012,30 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
   // --- Fever / illness confirmation -----------------------------------------
   // Triggered when a submitted temperature was at or above normal body temp.
   if (botState.awaiting_fever_check) {
+    if (!isYes(trimmed) && !isNo(trimmed)) {
+
+      if (checkTemperatureInput(trimmed).attempt) {
+        await reply(profile, from, "🤒 Quick check first — *do you have a high fever or feel sick?* Reply *YES* or *NO*.");
+        return;
+      }
+      // Anything else: drop the pending question and answer normally, so the
+      // bot never gets stuck on one unanswered yes/no.
+      const dropped = {
+        ...botState,
+        awaiting_fever_check: false,
+        pending_fever_temp: undefined,
+        pending_fever_date: undefined,
+      };
+      await supabaseAdmin.from("profiles").update({ bot_state: dropped }).eq("id", profile.id);
+      profile = { ...profile, bot_state: dropped };
+      Object.assign(botState, dropped);
+    }
+  }
+  if (botState.awaiting_fever_check) {
     const pendingTemp = typeof botState.pending_fever_temp === "number" ? botState.pending_fever_temp : null;
     const pendingDate =
       typeof botState.pending_fever_date === "string" ? botState.pending_fever_date : isoDate(new Date());
-    if (!isYes(trimmed) && !isNo(trimmed)) {
-      await reply(profile, from, "🤒 Quick check first — *do you have a high fever or feel sick?* Reply *YES* or *NO*.");
-      return;
-    }
+
     const cleared = {
       ...botState,
       awaiting_fever_check: false,
@@ -1048,15 +1065,26 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
 
   // --- Morning checklist (sleep / wake time / alcohol) -----------------------
   if (botState.awaiting_morning_check) {
-    const checkDate = typeof botState.morning_check_on === "string" ? botState.morning_check_on : isoDate(new Date());
     if (!isYes(trimmed) && !isNo(trimmed)) {
-      await reply(
-        profile,
-        from,
-        "☀️ Before your temperature — did *any* of these happen last night?\n• Slept less than 3 consecutive hours\n• Woke up much later than usual\n• Drank alcohol\n\nReply *1* = YES (any of them) · *2* = NO (none).",
-      );
-      return;
+
+      if (checkTemperatureInput(trimmed).attempt) {
+        await reply(
+          profile,
+          from,
+          "☀️ Before your temperature — did *any* of these happen last night?\n• Slept less than 3 consecutive hours\n• Woke up much later than usual\n• Drank alcohol\n\nReply *1* = YES (any of them) · *2* = NO (none).",
+        );
+        return;
+      }
+      // Any other message: drop the pending question and reply normally.
+      const dropped = { ...botState, awaiting_morning_check: false };
+      await supabaseAdmin.from("profiles").update({ bot_state: dropped }).eq("id", profile.id);
+      profile = { ...profile, bot_state: dropped };
+      Object.assign(botState, dropped);
     }
+  }
+  if (botState.awaiting_morning_check) {
+    const checkDate = typeof botState.morning_check_on === "string" ? botState.morning_check_on : isoDate(new Date());
+
     const yes = isYes(trimmed);
     const next = {
       ...botState,
@@ -1540,7 +1568,33 @@ async function sendStatus(profile: any, from: string) {
 
 // Store a reading that must NOT feed the fertility algorithm (fever, illness,
 // broken sleep, alcohol). It stays visible as a note, flagged `excluded`.
+/**
+ * Called by the web app before logging a temperature. The user's toggles answer
+ * the fever / disrupted-morning questions in advance, so the algorithm can
+ * decide immediately instead of starting a yes/no conversation.
+ */
+export async function prepareWebTempFlags(
+  profile: any,
+  loggedFor: string,
+  flags: { sick?: boolean; disrupted?: boolean },
+) {
+  const state = {
+    ...readBotState(profile),
+    awaiting_fever_check: false,
+    pending_fever_temp: undefined,
+    pending_fever_date: undefined,
+    awaiting_morning_check: false,
+    ignore_temp_on: flags.sick || flags.disrupted ? loggedFor : undefined,
+    ignore_reason: flags.sick ? "fever-or-illness" : flags.disrupted ? "disrupted-morning" : undefined,
+    // The user already told us she isn't sick, so don't ask again.
+    web_skip_fever_check_on: flags.sick ? undefined : loggedFor,
+  };
+  await supabaseAdmin.from("profiles").update({ bot_state: state }).eq("id", profile.id);
+  return state;
+}
+
 async function saveExcludedLog(profile: any, temp: number, loggedFor: string, reason: string) {
+
   const { data: cycle } = await supabaseAdmin
     .from("cycles")
     .select("id")
@@ -1639,10 +1693,33 @@ async function handleTempLog(
     return;
   }
 
+  // --- Excluded-day guard -------------------------------------------------
+  // The user told us (in WhatsApp or via the app toggles) that this morning was
+  // disrupted, or that she's unwell: store the reading as a note only.
+  if (botStateNow.ignore_temp_on === loggedFor) {
+    const reason = botStateNow.ignore_reason === "fever-or-illness" ? "fever-or-illness" : "disrupted-morning";
+    await saveExcludedLog(profile, temp, loggedFor, reason);
+    const clearedState = {
+      ...botStateNow,
+      ignore_temp_on: undefined,
+      ignore_reason: undefined,
+      web_skip_fever_check_on: undefined,
+    };
+    await supabaseAdmin.from("profiles").update({ bot_state: clearedState }).eq("id", profile.id);
+    await reply(
+      { ...profile, bot_state: clearedState },
+      from,
+      reason === "fever-or-illness"
+        ? `🤒 Saved *${temp.toFixed(2)}°C* for ${loggedFor} as a note only — *excluded from your fertility calculations* because you're unwell. Fever raises body temperature and would look like a false ovulation rise.\n\n💧 Rest, hydrate, and log again once you feel better.`
+        : `📝 Saved *${temp.toFixed(2)}°C* for ${loggedFor} as a note only — *excluded from your fertility calculations* because of short sleep, a late wake-up, or alcohol last night.\n\n😴 Aim for 3+ uninterrupted hours of sleep and measure at your usual time tomorrow for a reading that counts.`,
+    );
+    return;
+  }
+
   // --- Fever guard ------------------------------------------------------------
   // A reading at or above normal body temperature is very likely illness, not
   // ovulation. Ask before letting it move the prediction.
-  if (!opts?.skipFeverCheck && temp >= FEVER_C) {
+  if (!opts?.skipFeverCheck && botStateNow.web_skip_fever_check_on !== loggedFor && temp >= FEVER_C) {
     const feverState = {
       ...botStateNow,
       awaiting_fever_check: true,
@@ -1658,20 +1735,6 @@ async function handleTempLog(
     return;
   }
 
-  // --- Disrupted-morning guard -------------------------------------------------
-  // The user answered YES to the morning checklist (short sleep, late wake-up,
-  // or alcohol) for this date, so the reading is stored but not counted.
-  if (botStateNow.ignore_temp_on === loggedFor) {
-    await saveExcludedLog(profile, temp, loggedFor, "disrupted-morning");
-    const clearedState = { ...botStateNow, ignore_temp_on: undefined };
-    await supabaseAdmin.from("profiles").update({ bot_state: clearedState }).eq("id", profile.id);
-    await reply(
-      { ...profile, bot_state: clearedState },
-      from,
-      `📝 Saved *${temp.toFixed(2)}°C* for ${loggedFor} as a note only — *excluded from your fertility calculations* because of short sleep, a late wake-up, or alcohol last night.\n\n😴 Aim for 3+ uninterrupted hours of sleep and measure at your usual time tomorrow for a reading that counts.`,
-    );
-    return;
-  }
 
   const cycleStart = new Date(cycleStartIso);
 
