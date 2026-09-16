@@ -251,7 +251,36 @@ function Dashboard() {
                 onChange={(e) => setTemp(e.target.value)}
               />
             </div>
+
+            {/* A reading only counts if the morning was normal. These answers
+                let the algorithm decide straight away. */}
+            <div className="space-y-3 rounded-xl border bg-muted/30 p-3">
+              {parseFloat(temp) >= 37.5 ? (
+                <p className="text-xs text-rose-700">
+                  That reading is at or above normal body temperature — it looks unusual.
+                </p>
+              ) : null}
+              <div className="flex items-start justify-between gap-3">
+                <Label htmlFor="sick" className="text-xs font-normal leading-snug">
+                  I have a fever or feel sick
+                </Label>
+                <Switch id="sick" checked={sick} onCheckedChange={setSick} />
+              </div>
+              <div className="flex items-start justify-between gap-3">
+                <Label htmlFor="disrupted" className="text-xs font-normal leading-snug">
+                  Slept less than 3 hours, woke up much later than usual, or drank alcohol
+                </Label>
+                <Switch id="disrupted" checked={disrupted} onCheckedChange={setDisrupted} />
+              </div>
+              {sick || disrupted ? (
+                <p className="text-xs text-muted-foreground">
+                  This reading will be saved as a note only and left out of your fertility calculations.
+                </p>
+              ) : null}
+            </div>
+
             <Button type="submit" className="w-full">Save</Button>
+
           </form>
         </DialogContent>
       </Dialog>
