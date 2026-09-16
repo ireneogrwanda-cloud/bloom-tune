@@ -55,9 +55,16 @@ function AuthLayout() {
               </button>
             </SheetTrigger>
             <SheetContent side="left" className="w-72 p-0">
+              <div className="h-12 bg-background" />
               <SheetHeader className="border-b bg-primary px-5 py-6 text-primary-foreground">
-                <SheetTitle className="text-primary-foreground">My Cycle AI</SheetTitle>
+                <SheetTitle className="flex items-center gap-3 text-lg text-primary-foreground">
+                  <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-accent text-base text-accent-foreground">
+                    M
+                  </span>
+                  My Cycle AI
+                </SheetTitle>
               </SheetHeader>
+
               <nav className="flex flex-col p-2">
                 {MENU.map(({ to, label, icon: Icon }) => (
                   <Link
