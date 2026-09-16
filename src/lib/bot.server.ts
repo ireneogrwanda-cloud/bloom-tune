@@ -1665,10 +1665,33 @@ async function handleTempLog(
     return;
   }
 
+  // --- Excluded-day guard -------------------------------------------------
+  // The user told us (in WhatsApp or via the app toggles) that this morning was
+  // disrupted, or that she's unwell: store the reading as a note only.
+  if (botStateNow.ignore_temp_on === loggedFor) {
+    const reason = botStateNow.ignore_reason === "fever-or-illness" ? "fever-or-illness" : "disrupted-morning";
+    await saveExcludedLog(profile, temp, loggedFor, reason);
+    const clearedState = {
+      ...botStateNow,
+      ignore_temp_on: undefined,
+      ignore_reason: undefined,
+      web_skip_fever_check_on: undefined,
+    };
+    await supabaseAdmin.from("profiles").update({ bot_state: clearedState }).eq("id", profile.id);
+    await reply(
+      { ...profile, bot_state: clearedState },
+      from,
+      reason === "fever-or-illness"
+        ? `🤒 Saved *${temp.toFixed(2)}°C* for ${loggedFor} as a note only — *excluded from your fertility calculations* because you're unwell. Fever raises body temperature and would look like a false ovulation rise.\n\n💧 Rest, hydrate, and log again once you feel better.`
+        : `📝 Saved *${temp.toFixed(2)}°C* for ${loggedFor} as a note only — *excluded from your fertility calculations* because of short sleep, a late wake-up, or alcohol last night.\n\n😴 Aim for 3+ uninterrupted hours of sleep and measure at your usual time tomorrow for a reading that counts.`,
+    );
+    return;
+  }
+
   // --- Fever guard ------------------------------------------------------------
   // A reading at or above normal body temperature is very likely illness, not
   // ovulation. Ask before letting it move the prediction.
-  if (!opts?.skipFeverCheck && temp >= FEVER_C) {
+  if (!opts?.skipFeverCheck && botStateNow.web_skip_fever_check_on !== loggedFor && temp >= FEVER_C) {
     const feverState = {
       ...botStateNow,
       awaiting_fever_check: true,
@@ -1684,20 +1707,6 @@ async function handleTempLog(
     return;
   }
 
-  // --- Disrupted-morning guard -------------------------------------------------
-  // The user answered YES to the morning checklist (short sleep, late wake-up,
-  // or alcohol) for this date, so the reading is stored but not counted.
-  if (botStateNow.ignore_temp_on === loggedFor) {
-    await saveExcludedLog(profile, temp, loggedFor, "disrupted-morning");
-    const clearedState = { ...botStateNow, ignore_temp_on: undefined };
-    await supabaseAdmin.from("profiles").update({ bot_state: clearedState }).eq("id", profile.id);
-    await reply(
-      { ...profile, bot_state: clearedState },
-      from,
-      `📝 Saved *${temp.toFixed(2)}°C* for ${loggedFor} as a note only — *excluded from your fertility calculations* because of short sleep, a late wake-up, or alcohol last night.\n\n😴 Aim for 3+ uninterrupted hours of sleep and measure at your usual time tomorrow for a reading that counts.`,
-    );
-    return;
-  }
 
   const cycleStart = new Date(cycleStartIso);
 
