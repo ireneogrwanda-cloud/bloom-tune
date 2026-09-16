@@ -2,6 +2,7 @@ import { createFileRoute, redirect, Outlet, Link, useNavigate } from "@tanstack/
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { NotificationBell } from "@/components/notification-bell";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -38,6 +39,7 @@ function AuthLayout() {
             My Cycle AI
           </Link>
           <nav className="flex items-center gap-1">
+            <NotificationBell />
             <Button asChild variant="ghost" size="sm"><Link to="/dashboard">Dashboard</Link></Button>
             <Button asChild variant="ghost" size="sm"><Link to="/how-it-works">How it works</Link></Button>
             <Button asChild variant="ghost" size="sm"><Link to="/settings">Settings</Link></Button>

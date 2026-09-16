@@ -8,6 +8,7 @@ import { getDashboard } from "@/lib/profile.functions";
 import { CycleChart } from "@/components/cycle-chart";
 import { Button } from "@/components/ui/button";
 import { useInstallPrompt } from "@/hooks/use-install-prompt";
+import { NotificationBell } from "@/components/notification-bell";
 import {
   Send,
   Phone,
