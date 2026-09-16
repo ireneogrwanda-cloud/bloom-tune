@@ -8,6 +8,7 @@ import { getDashboard } from "@/lib/profile.functions";
 import { CycleChart } from "@/components/cycle-chart";
 import { Button } from "@/components/ui/button";
 import { useInstallPrompt } from "@/hooks/use-install-prompt";
+import { NotificationBell } from "@/components/notification-bell";
 import {
   Send,
   Phone,
@@ -119,6 +120,7 @@ function ChatHeader({ authed }: { authed: boolean | null }) {
         <p className="truncate text-xs text-emerald-100/90">fertility assistant · online</p>
       </div>
       <div className="flex items-center gap-1 opacity-90">
+        {authed ? <NotificationBell tone="dark" /> : null}
         <Video className="h-5 w-5" />
         <Phone className="h-5 w-5" />
         <MoreVertical className="h-5 w-5" />
