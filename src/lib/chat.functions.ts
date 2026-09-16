@@ -14,14 +14,17 @@ export const getChatHistory = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<ChatMessage[]> => {
     const { supabase, userId } = context;
+    // Take the NEWEST 200 messages, then flip them back into reading order.
+    // (Ascending + limit would pin the thread to the oldest messages, so new
+    // replies would never show up once the history grew past the limit.)
     const { data, error } = await supabase
       .from("bot_messages")
       .select("id, direction, body, media_url, created_at")
       .eq("user_id", userId)
-      .order("created_at", { ascending: true })
+      .order("created_at", { ascending: false })
       .limit(200);
     if (error) throw error;
-    return (data ?? []).map((m) => ({
+    return (data ?? []).reverse().map((m) => ({
       id: m.id,
       direction: m.direction as "in" | "out",
       body: m.body,
