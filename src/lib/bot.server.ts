@@ -1801,6 +1801,14 @@ export async function sendDailyLogReminders(now = new Date()) {
     const local = localDateHour(now, timeZone);
     if (local.hour !== 6 || state.last_6am_reminder_on === local.date) continue;
 
+    // Same alerts in the app / on the phone, not only on WhatsApp.
+    try {
+      const { syncNotificationsFor } = await import("@/lib/notifications.server");
+      await syncNotificationsFor(supabaseAdmin, profile.id, local.date);
+    } catch (e) {
+      console.error("notification sync failed", e);
+    }
+
     // If user is past their average cycle length, ask the bleeding question
     // instead of the usual log reminder.
     let message = [
