@@ -1012,10 +1012,8 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
   // --- Fever / illness confirmation -----------------------------------------
   // Triggered when a submitted temperature was at or above normal body temp.
   if (botState.awaiting_fever_check) {
-    const pendingTemp = typeof botState.pending_fever_temp === "number" ? botState.pending_fever_temp : null;
-    const pendingDate =
-      typeof botState.pending_fever_date === "string" ? botState.pending_fever_date : isoDate(new Date());
     if (!isYes(trimmed) && !isNo(trimmed)) {
+
       if (checkTemperatureInput(trimmed).attempt) {
         await reply(profile, from, "🤒 Quick check first — *do you have a high fever or feel sick?* Reply *YES* or *NO*.");
         return;
