@@ -104,8 +104,8 @@ function Dashboard() {
     }
   }
 
-  async function onNewCycle() {
-    if (!confirm("Start a new cycle today? Your current cycle will be closed.")) return;
+  async function onNewCycle(opts?: { skipConfirm?: boolean }) {
+    if (!opts?.skipConfirm && !confirm("Start a new cycle today? Your current cycle will be closed.")) return;
     try {
       await newCycle({ data: { startedOn: isoDate(new Date()) } });
       toast.success("New cycle started");
