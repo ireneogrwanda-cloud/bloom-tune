@@ -102,8 +102,9 @@ function Dashboard() {
 
   async function saveTemp(e: React.FormEvent) {
     e.preventDefault();
-    const t = parseFloat(temp);
-    if (!isFinite(t) || t < 35 || t > 38) return toast.error(t("Enter a temperature between 35.00 and 38.00°C"));
+    const value = parseFloat(temp);
+    if (!isFinite(value) || value < 35 || value > 38)
+      return toast.error(t("Enter a temperature between 35.00 and 38.00°C"));
     try {
       const res = await logViaBot({
         data: {
