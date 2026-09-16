@@ -2,7 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getDashboard, logTemperature, startNewCycle } from "@/lib/profile.functions";
+import { getDashboard, startNewCycle } from "@/lib/profile.functions";
+import { logTemperatureViaBot } from "@/lib/chat.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,7 +30,7 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 
 function Dashboard() {
   const fetchDash = useServerFn(getDashboard);
-  const logTemp = useServerFn(logTemperature);
+  const logViaBot = useServerFn(logTemperatureViaBot);
   const newCycle = useServerFn(startNewCycle);
   const qc = useQueryClient();
 
@@ -94,11 +95,13 @@ function Dashboard() {
     const t = parseFloat(temp);
     if (!isFinite(t) || t < 35 || t > 38) return toast.error("Enter a temperature between 35.00 and 38.00°C");
     try {
-      await logTemp({ data: { loggedFor: pickedDate!, tempCelsius: Math.round(t * 100) / 100 } });
-      toast.success("Logged");
+      const res = await logViaBot({ data: { loggedFor: pickedDate!, tempCelsius: Math.round(t * 100) / 100 } });
+      toast.success(res?.note ? "Logged — note sent to your chat" : "Logged");
       setPickedDate(null);
       setTemp("");
       qc.invalidateQueries({ queryKey: ["dashboard"] });
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+      qc.invalidateQueries({ queryKey: ["chat"] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed");
     }
@@ -150,7 +153,7 @@ function Dashboard() {
       />
 
       {stats && activeCycle && (
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
           <StatCard label="Cycle day" value={String(stats.cycleDay)} sub={`Started ${activeCycle.started_on}`} />
           <StatCard
             label="Status"
@@ -242,10 +245,10 @@ function Dashboard() {
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-2xl border bg-card p-5">
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-1 text-2xl font-bold">{value}</p>
-      {sub && <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{sub}</p>}
+    <div className="rounded-2xl border bg-card p-3">
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-0.5 text-base font-bold leading-tight sm:text-lg">{value}</p>
+      {sub && <p className="mt-1 text-[10px] leading-snug text-muted-foreground line-clamp-3">{sub}</p>}
     </div>
   );
 }
