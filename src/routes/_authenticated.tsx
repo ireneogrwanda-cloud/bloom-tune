@@ -99,6 +99,7 @@ function AuthLayout() {
             </Link>
           </Button>
         </div>
+        </div>
       </header>
       <main className="container mx-auto px-4 py-6"><Outlet /></main>
       <footer className="mt-12 border-t bg-muted/30">
