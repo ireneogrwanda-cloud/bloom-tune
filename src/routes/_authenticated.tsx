@@ -45,15 +45,15 @@ function AuthLayout() {
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-20 bg-primary text-primary-foreground shadow-sm">
-        <div className="container mx-auto flex items-center gap-2 px-4 py-3">
+        <div className="container mx-auto flex items-center gap-3 px-4 py-6">
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
-              <button aria-label="Open menu" className="rounded-full p-2 hover:bg-primary-foreground/10">
-                <Menu className="h-5 w-5" />
+              <button aria-label="Open menu" className="rounded-full p-3 hover:bg-primary-foreground/10">
+                <Menu className="h-6 w-6" />
               </button>
             </SheetTrigger>
             <SheetContent side="left" className="w-72 p-0">
-              <SheetHeader className="border-b bg-primary px-5 py-4 text-primary-foreground">
+              <SheetHeader className="border-b bg-primary px-5 py-6 text-primary-foreground">
                 <SheetTitle className="text-primary-foreground">My Cycle AI</SheetTitle>
               </SheetHeader>
               <nav className="flex flex-col p-2">
@@ -77,8 +77,8 @@ function AuthLayout() {
             </SheetContent>
           </Sheet>
 
-          <Link to="/dashboard" className="flex min-w-0 flex-1 items-center gap-2 font-semibold">
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-accent text-sm text-accent-foreground">
+          <Link to="/dashboard" className="flex min-w-0 flex-1 items-center gap-3 text-lg font-semibold">
+            <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-accent text-base text-accent-foreground">
               M
             </span>
             <span className="truncate">My Cycle AI</span>
@@ -87,13 +87,12 @@ function AuthLayout() {
           <NotificationBell tone="dark" />
           <Button
             asChild
-            size="sm"
             variant="secondary"
-            className="gap-1.5 rounded-full"
+            className="gap-2 rounded-full px-4 py-2"
             aria-label="Ask the AI assistant"
           >
             <Link to="/assistant">
-              <Bot className="h-4 w-4" />
+              <Bot className="h-5 w-5" />
               <span className="hidden sm:inline">Ask AI</span>
             </Link>
           </Button>
