@@ -4,9 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated")({
+  ssr: false,
   beforeLoad: async () => {
-    const { data, error } = await supabase.auth.getUser();
-    if (error || !data.user) throw redirect({ to: "/login" });
+    // Trust the stored session first: it survives reloads and is refreshed
+    // automatically, so a slow or failed network call never signs anyone out.
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) throw redirect({ to: "/login" });
   },
   component: AuthLayout,
 });
@@ -14,8 +17,9 @@ export const Route = createFileRoute("/_authenticated")({
 function AuthLayout() {
   const nav = useNavigate();
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      if (!session) nav({ to: "/login" });
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      // Only a real sign-out sends you back to the login screen.
+      if (event === "SIGNED_OUT") nav({ to: "/login" });
     });
     return () => sub.subscription.unsubscribe();
   }, [nav]);
