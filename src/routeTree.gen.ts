@@ -16,6 +16,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as AuthenticatedHowItWorksRouteImport } from './routes/_authenticated/how-it-works'
+import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
 import { Route as AuthenticatedFertilityRouteImport } from './routes/_authenticated/fertility'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedAssistantRouteImport } from './routes/_authenticated/assistant'
@@ -56,6 +57,11 @@ const AuthenticatedHowItWorksRoute = AuthenticatedHowItWorksRouteImport.update({
   path: '/how-it-works',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedHistoryRoute = AuthenticatedHistoryRouteImport.update({
+  id: '/history',
+  path: '/history',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedFertilityRoute = AuthenticatedFertilityRouteImport.update({
   id: '/fertility',
   path: '/fertility',
@@ -91,6 +97,7 @@ export interface FileRoutesByFullPath {
   '/assistant': typeof AuthenticatedAssistantRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/fertility': typeof AuthenticatedFertilityRoute
+  '/history': typeof AuthenticatedHistoryRoute
   '/how-it-works': typeof AuthenticatedHowItWorksRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -104,6 +111,7 @@ export interface FileRoutesByTo {
   '/assistant': typeof AuthenticatedAssistantRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/fertility': typeof AuthenticatedFertilityRoute
+  '/history': typeof AuthenticatedHistoryRoute
   '/how-it-works': typeof AuthenticatedHowItWorksRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -119,6 +127,7 @@ export interface FileRoutesById {
   '/_authenticated/assistant': typeof AuthenticatedAssistantRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/fertility': typeof AuthenticatedFertilityRoute
+  '/_authenticated/history': typeof AuthenticatedHistoryRoute
   '/_authenticated/how-it-works': typeof AuthenticatedHowItWorksRoute
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
@@ -134,6 +143,7 @@ export interface FileRouteTypes {
     | '/assistant'
     | '/dashboard'
     | '/fertility'
+    | '/history'
     | '/how-it-works'
     | '/onboarding'
     | '/settings'
@@ -147,6 +157,7 @@ export interface FileRouteTypes {
     | '/assistant'
     | '/dashboard'
     | '/fertility'
+    | '/history'
     | '/how-it-works'
     | '/onboarding'
     | '/settings'
@@ -161,6 +172,7 @@ export interface FileRouteTypes {
     | '/_authenticated/assistant'
     | '/_authenticated/dashboard'
     | '/_authenticated/fertility'
+    | '/_authenticated/history'
     | '/_authenticated/how-it-works'
     | '/_authenticated/onboarding'
     | '/_authenticated/settings'
@@ -228,6 +240,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedHowItWorksRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/history': {
+      id: '/_authenticated/history'
+      path: '/history'
+      fullPath: '/history'
+      preLoaderRoute: typeof AuthenticatedHistoryRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/fertility': {
       id: '/_authenticated/fertility'
       path: '/fertility'
@@ -270,6 +289,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedAssistantRoute: typeof AuthenticatedAssistantRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedFertilityRoute: typeof AuthenticatedFertilityRoute
+  AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRoute
   AuthenticatedHowItWorksRoute: typeof AuthenticatedHowItWorksRoute
   AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
@@ -279,6 +299,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAssistantRoute: AuthenticatedAssistantRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedFertilityRoute: AuthenticatedFertilityRoute,
+  AuthenticatedHistoryRoute: AuthenticatedHistoryRoute,
   AuthenticatedHowItWorksRoute: AuthenticatedHowItWorksRoute,
   AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
