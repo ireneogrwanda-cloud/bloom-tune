@@ -37,6 +37,18 @@ function Dashboard() {
 
   const [temp, setTemp] = useState("");
   const [pickedDate, setPickedDate] = useState<string | null>(null);
+  // "Not yet" only hides the question for today — it comes back each day until
+  // bleeding actually starts.
+  const todayIso = isoDate(new Date());
+  const [bleedDismissed, setBleedDismissed] = useState<string | null>(() =>
+    typeof window === "undefined" ? null : window.localStorage.getItem("bleed_asked_on"),
+  );
+  const bleedAsked = bleedDismissed === todayIso;
+  function setBleedAsked(v: boolean) {
+    if (!v) return;
+    window.localStorage.setItem("bleed_asked_on", todayIso);
+    setBleedDismissed(todayIso);
+  }
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
   if (!data) return <p>Failed to load.</p>;
@@ -92,8 +104,8 @@ function Dashboard() {
     }
   }
 
-  async function onNewCycle() {
-    if (!confirm("Start a new cycle today? Your current cycle will be closed.")) return;
+  async function onNewCycle(opts?: { skipConfirm?: boolean }) {
+    if (!opts?.skipConfirm && !confirm("Start a new cycle today? Your current cycle will be closed.")) return;
     try {
       await newCycle({ data: { startedOn: isoDate(new Date()) } });
       toast.success("New cycle started");
@@ -112,10 +124,23 @@ function Dashboard() {
             WhatsApp: <span className="font-mono">+{profile.whatsapp_number}</span> · Avg cycle {profile.avg_cycle_length}d
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={onNewCycle}>
+        <Button variant="outline" size="sm" onClick={() => onNewCycle()}>
           <RotateCcw className="mr-1 h-4 w-4" /> New cycle
         </Button>
       </div>
+
+      {stats && stats.cycleDay >= stats.predictedCycleLength + 1 && !bleedAsked && (
+        <section className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-rose-900">
+          <h2 className="font-semibold">Has your period started?</h2>
+          <p className="mt-1 text-sm">
+            You're on day {stats.cycleDay} — your period is expected around now. Are you bleeding today?
+          </p>
+          <div className="mt-3 flex gap-2">
+            <Button size="sm" onClick={() => onNewCycle({ skipConfirm: true })}>Yes, I'm bleeding</Button>
+            <Button size="sm" variant="outline" onClick={() => setBleedAsked(true)}>Not yet</Button>
+          </div>
+        </section>
+      )}
 
       <CycleCalendar
         profile={profile}

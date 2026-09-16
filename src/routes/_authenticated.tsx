@@ -44,7 +44,9 @@ function AuthLayout() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-20 bg-primary text-primary-foreground shadow-sm">
+      <header className="sticky top-0 z-20 shadow-sm">
+        <div className="h-12 bg-background" />
+        <div className="bg-primary text-primary-foreground">
         <div className="container mx-auto flex items-center gap-3 px-4 py-6">
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
@@ -96,6 +98,7 @@ function AuthLayout() {
               <span className="hidden sm:inline">Ask AI</span>
             </Link>
           </Button>
+        </div>
         </div>
       </header>
       <main className="container mx-auto px-4 py-6"><Outlet /></main>
