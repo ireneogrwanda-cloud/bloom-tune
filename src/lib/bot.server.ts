@@ -1067,8 +1067,8 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
 
   // --- Morning checklist (sleep / wake time / alcohol) -----------------------
   if (botState.awaiting_morning_check) {
-    const checkDate = typeof botState.morning_check_on === "string" ? botState.morning_check_on : isoDate(new Date());
     if (!isYes(trimmed) && !isNo(trimmed)) {
+
       if (checkTemperatureInput(trimmed).attempt) {
         await reply(
           profile,
