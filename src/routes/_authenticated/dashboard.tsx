@@ -150,7 +150,7 @@ function Dashboard() {
       />
 
       {stats && activeCycle && (
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
           <StatCard label="Cycle day" value={String(stats.cycleDay)} sub={`Started ${activeCycle.started_on}`} />
           <StatCard
             label="Status"
@@ -242,10 +242,10 @@ function Dashboard() {
 
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-2xl border bg-card p-5">
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-1 text-2xl font-bold">{value}</p>
-      {sub && <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{sub}</p>}
+    <div className="rounded-2xl border bg-card p-3">
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-0.5 text-base font-bold leading-tight sm:text-lg">{value}</p>
+      {sub && <p className="mt-1 text-[10px] leading-snug text-muted-foreground line-clamp-3">{sub}</p>}
     </div>
   );
 }
