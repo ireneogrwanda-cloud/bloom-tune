@@ -77,8 +77,20 @@ export async function syncNotificationsFor(db: AnyClient, userId: string, todayI
     .select();
 
   const fresh = (inserted ?? []) as Array<NotificationDraft & { id: string }>;
-  if (fresh.length) await pushToUser(db, userId, fresh);
+  if (fresh.length) {
+    // Mirror every new alert into the chat thread so the assistant shows the
+    // same messages WhatsApp sends.
+    await db.from("bot_messages").insert(
+      fresh.map((n) => ({
+        user_id: userId,
+        direction: "out",
+        body: `${n.title}\n\n${n.body}`,
+      })),
+    );
+    await pushToUser(db, userId, fresh);
+  }
   return fresh;
+
 }
 
 /** Fire-and-forget device push. Silently skipped until Firebase is connected. */
