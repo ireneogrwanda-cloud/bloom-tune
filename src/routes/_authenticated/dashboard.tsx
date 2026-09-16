@@ -85,8 +85,11 @@ function Dashboard() {
     : null;
 
   function openDay(iso: string) {
+    if (iso > todayIso) return toast.error("You can't log a temperature for a future day.");
     const existing = data!.activeLogs.find((l: any) => l.logged_for === iso);
     setTemp(existing ? Number(existing.temp_celsius).toFixed(2) : "");
+    setSick(false);
+    setDisrupted(false);
     setPickedDate(iso);
   }
 
@@ -95,17 +98,27 @@ function Dashboard() {
     const t = parseFloat(temp);
     if (!isFinite(t) || t < 35 || t > 38) return toast.error("Enter a temperature between 35.00 and 38.00°C");
     try {
-      const res = await logViaBot({ data: { loggedFor: pickedDate!, tempCelsius: Math.round(t * 100) / 100 } });
+      const res = await logViaBot({
+        data: {
+          loggedFor: pickedDate!,
+          tempCelsius: Math.round(t * 100) / 100,
+          sick,
+          disruptedMorning: disrupted,
+        },
+      });
       toast.success(res?.note ? "Logged — note sent to your chat" : "Logged");
       setPickedDate(null);
       setTemp("");
+      setSick(false);
+      setDisrupted(false);
       qc.invalidateQueries({ queryKey: ["dashboard"] });
       qc.invalidateQueries({ queryKey: ["notifications"] });
-      qc.invalidateQueries({ queryKey: ["chat"] });
+      qc.invalidateQueries({ queryKey: ["chat-history"] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed");
     }
   }
+
 
   async function onNewCycle(opts?: { skipConfirm?: boolean }) {
     if (!opts?.skipConfirm && !confirm("Start a new cycle today? Your current cycle will be closed.")) return;
