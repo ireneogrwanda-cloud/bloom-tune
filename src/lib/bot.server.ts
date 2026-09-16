@@ -1016,9 +1016,28 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
     const pendingDate =
       typeof botState.pending_fever_date === "string" ? botState.pending_fever_date : isoDate(new Date());
     if (!isYes(trimmed) && !isNo(trimmed)) {
-      await reply(profile, from, "🤒 Quick check first — *do you have a high fever or feel sick?* Reply *YES* or *NO*.");
-      return;
+      if (checkTemperatureInput(trimmed).attempt) {
+        await reply(profile, from, "🤒 Quick check first — *do you have a high fever or feel sick?* Reply *YES* or *NO*.");
+        return;
+      }
+      // Anything else: drop the pending question and answer normally, so the
+      // bot never gets stuck on one unanswered yes/no.
+      const dropped = {
+        ...botState,
+        awaiting_fever_check: false,
+        pending_fever_temp: undefined,
+        pending_fever_date: undefined,
+      };
+      await supabaseAdmin.from("profiles").update({ bot_state: dropped }).eq("id", profile.id);
+      profile = { ...profile, bot_state: dropped };
+      Object.assign(botState, dropped);
     }
+  }
+  if (botState.awaiting_fever_check) {
+    const pendingTemp = typeof botState.pending_fever_temp === "number" ? botState.pending_fever_temp : null;
+    const pendingDate =
+      typeof botState.pending_fever_date === "string" ? botState.pending_fever_date : isoDate(new Date());
+
     const cleared = {
       ...botState,
       awaiting_fever_check: false,
