@@ -1540,7 +1540,33 @@ async function sendStatus(profile: any, from: string) {
 
 // Store a reading that must NOT feed the fertility algorithm (fever, illness,
 // broken sleep, alcohol). It stays visible as a note, flagged `excluded`.
+/**
+ * Called by the web app before logging a temperature. The user's toggles answer
+ * the fever / disrupted-morning questions in advance, so the algorithm can
+ * decide immediately instead of starting a yes/no conversation.
+ */
+export async function prepareWebTempFlags(
+  profile: any,
+  loggedFor: string,
+  flags: { sick?: boolean; disrupted?: boolean },
+) {
+  const state = {
+    ...readBotState(profile),
+    awaiting_fever_check: false,
+    pending_fever_temp: undefined,
+    pending_fever_date: undefined,
+    awaiting_morning_check: false,
+    ignore_temp_on: flags.sick || flags.disrupted ? loggedFor : undefined,
+    ignore_reason: flags.sick ? "fever-or-illness" : flags.disrupted ? "disrupted-morning" : undefined,
+    // The user already told us she isn't sick, so don't ask again.
+    web_skip_fever_check_on: flags.sick ? undefined : loggedFor,
+  };
+  await supabaseAdmin.from("profiles").update({ bot_state: state }).eq("id", profile.id);
+  return state;
+}
+
 async function saveExcludedLog(profile: any, temp: number, loggedFor: string, reason: string) {
+
   const { data: cycle } = await supabaseAdmin
     .from("cycles")
     .select("id")
