@@ -1069,13 +1069,24 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
   if (botState.awaiting_morning_check) {
     const checkDate = typeof botState.morning_check_on === "string" ? botState.morning_check_on : isoDate(new Date());
     if (!isYes(trimmed) && !isNo(trimmed)) {
-      await reply(
-        profile,
-        from,
-        "☀️ Before your temperature — did *any* of these happen last night?\n• Slept less than 3 consecutive hours\n• Woke up much later than usual\n• Drank alcohol\n\nReply *1* = YES (any of them) · *2* = NO (none).",
-      );
-      return;
+      if (checkTemperatureInput(trimmed).attempt) {
+        await reply(
+          profile,
+          from,
+          "☀️ Before your temperature — did *any* of these happen last night?\n• Slept less than 3 consecutive hours\n• Woke up much later than usual\n• Drank alcohol\n\nReply *1* = YES (any of them) · *2* = NO (none).",
+        );
+        return;
+      }
+      // Any other message: drop the pending question and reply normally.
+      const dropped = { ...botState, awaiting_morning_check: false };
+      await supabaseAdmin.from("profiles").update({ bot_state: dropped }).eq("id", profile.id);
+      profile = { ...profile, bot_state: dropped };
+      Object.assign(botState, dropped);
     }
+  }
+  if (botState.awaiting_morning_check) {
+    const checkDate = typeof botState.morning_check_on === "string" ? botState.morning_check_on : isoDate(new Date());
+
     const yes = isYes(trimmed);
     const next = {
       ...botState,
