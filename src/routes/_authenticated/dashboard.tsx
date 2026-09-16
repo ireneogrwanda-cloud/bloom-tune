@@ -1,18 +1,29 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDashboard, logTemperature, startNewCycle } from "@/lib/profile.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { predictCycle, isoDate, type TempPoint } from "@/lib/fertility";
 import { CycleChart } from "@/components/cycle-chart";
-import { MessageCircle, RotateCcw } from "lucide-react";
+import { CycleCalendar } from "@/components/cycle-calendar";
+import { RotateCcw } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
-  head: () => ({ meta: [{ title: "Dashboard — My Cycle AI" }] }),
+  head: () => ({
+    meta: [
+      { title: "Your cycle calendar — My Cycle AI" },
+      { name: "description", content: "Your monthly cycle calendar with fertile and infertile days, and your daily temperature log." },
+      { property: "og:title", content: "Your cycle calendar — My Cycle AI" },
+      { property: "og:description", content: "See fertile and infertile days at a glance and log your morning temperature." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: Dashboard,
 });
 
@@ -25,13 +36,7 @@ function Dashboard() {
   const { data, isLoading } = useQuery({ queryKey: ["dashboard"], queryFn: () => fetchDash() });
 
   const [temp, setTemp] = useState("");
-  const [logDate, setLogDate] = useState(isoDate(new Date()));
-
-  useEffect(() => {
-    if (data && !data.profile?.whatsapp_number) {
-      // not onboarded yet
-    }
-  }, [data]);
+  const [pickedDate, setPickedDate] = useState<string | null>(null);
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
   if (!data) return <p>Failed to load.</p>;
@@ -66,14 +71,20 @@ function Dashboard() {
       })
     : null;
 
+  function openDay(iso: string) {
+    const existing = data!.activeLogs.find((l: any) => l.logged_for === iso);
+    setTemp(existing ? Number(existing.temp_celsius).toFixed(2) : "");
+    setPickedDate(iso);
+  }
 
-  async function onLog(e: React.FormEvent) {
+  async function saveTemp(e: React.FormEvent) {
     e.preventDefault();
     const t = parseFloat(temp);
-    if (!isFinite(t) || t < 35 || t > 40) return toast.error("Enter a temperature between 35 and 40°C");
+    if (!isFinite(t) || t < 35 || t > 38) return toast.error("Enter a temperature between 35.00 and 38.00°C");
     try {
-      await logTemp({ data: { loggedFor: logDate, tempCelsius: t } });
+      await logTemp({ data: { loggedFor: pickedDate!, tempCelsius: Math.round(t * 100) / 100 } });
       toast.success("Logged");
+      setPickedDate(null);
       setTemp("");
       qc.invalidateQueries({ queryKey: ["dashboard"] });
     } catch (e: any) {
@@ -93,7 +104,7 @@ function Dashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6">
       <div className="flex items-end justify-between">
         <div>
           <h1 className="text-2xl font-bold">Hi {profile.display_name?.split(" ")[0]}</h1>
@@ -105,6 +116,13 @@ function Dashboard() {
           <RotateCcw className="mr-1 h-4 w-4" /> New cycle
         </Button>
       </div>
+
+      <CycleCalendar
+        profile={profile}
+        activeCycle={activeCycle}
+        activeLogs={data.activeLogs}
+        onSelectDate={openDay}
+      />
 
       {stats && activeCycle && (
         <div className="grid gap-4 md:grid-cols-3">
@@ -128,35 +146,7 @@ function Dashboard() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <CycleChart profile={profile} activeCycle={activeCycle} activeLogs={data.activeLogs} />
-        </div>
-
-
-        <div className="space-y-4">
-          <form onSubmit={onLog} className="rounded-2xl border bg-card p-5 space-y-3">
-            <h3 className="font-semibold">Log a temperature</h3>
-            <div className="space-y-1.5">
-              <Label htmlFor="d">Date</Label>
-              <Input id="d" type="date" value={logDate} onChange={(e) => setLogDate(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="t">Temperature (°C)</Label>
-              <Input id="t" type="number" step="0.01" min="35" max="40" placeholder="36.7" value={temp} onChange={(e) => setTemp(e.target.value)} />
-            </div>
-            <Button type="submit" className="w-full">Save</Button>
-          </form>
-
-          <div className="rounded-2xl border bg-gradient-to-br from-emerald-50 to-rose-50 p-5">
-            <h3 className="font-semibold flex items-center gap-2"><MessageCircle className="h-4 w-4" /> WhatsApp setup</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Send any temperature (e.g. <code>36.7</code>) from <span className="font-mono">+{profile.whatsapp_number}</span> to our bot and you'll get an instant prediction.
-            </p>
-            <p className="mt-2 text-xs text-muted-foreground">Commands: <code>status</code> · <code>reset cycle</code> · <code>help</code></p>
-          </div>
-        </div>
-      </div>
+      <CycleChart profile={profile} activeCycle={activeCycle} activeLogs={data.activeLogs} />
 
       {/* Monthly summary — simple at-a-glance stats for the current cycle */}
       {(() => {
@@ -194,23 +184,33 @@ function Dashboard() {
         );
       })()}
 
-      <section>
-        <h2 className="font-semibold mb-2">Past cycles</h2>
-        <div className="rounded-2xl border bg-card divide-y">
-          {data.cycles.length === 0 && <p className="p-5 text-sm text-muted-foreground">No cycles recorded yet.</p>}
-          {data.cycles.map((c: any) => (
-            <div key={c.id} className="flex items-center justify-between p-4 text-sm">
-              <div>
-                <p className="font-medium">{c.started_on} {c.ended_on ? `→ ${c.ended_on}` : "(active)"}</p>
-                <p className="text-xs text-muted-foreground">
-                  Status: {c.status}{c.ovulation_day ? ` · Ovulation day ${c.ovulation_day}` : ""}
-                </p>
-              </div>
-              <span className={`rounded-full px-2 py-0.5 text-xs ${c.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground"}`}>{c.status}</span>
+      <Dialog open={!!pickedDate} onOpenChange={(o) => !o && setPickedDate(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Morning temperature</DialogTitle>
+            <DialogDescription>
+              {pickedDate ? new Date(pickedDate).toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" }) : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={saveTemp} className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="t">Temperature (°C)</Label>
+              <Input
+                id="t"
+                type="number"
+                step="0.01"
+                min="35"
+                max="38"
+                autoFocus
+                placeholder="36.72"
+                value={temp}
+                onChange={(e) => setTemp(e.target.value)}
+              />
             </div>
-          ))}
-        </div>
-      </section>
+            <Button type="submit" className="w-full">Save</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
