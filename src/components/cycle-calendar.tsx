@@ -62,7 +62,7 @@ export function CycleCalendar({ profile, activeCycle, activeLogs, pastCycles = [
   const stats = useMemo(() => {
     if (!cycleStart) return null;
     const temps: TempPoint[] = activeLogs
-       .filter((l) => !l.excluded && l.logged_for >= activeCycle!.started_on && l.logged_for <= todayIso)
+       .filter((l) => !l.excluded && l.logged_for >= (activeCycle?.started_on ?? "") && l.logged_for <= todayIso)
       .map((l) => ({
          day: cycleDayFor(cycleStart, dateFromIso(l.logged_for)),
         temp: Number(l.temp_celsius),
