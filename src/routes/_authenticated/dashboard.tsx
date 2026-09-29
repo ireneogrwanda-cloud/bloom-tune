@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { predictCycle, isoDate, type TempPoint } from "@/lib/fertility";
+import { predictCycle, isoDate, daysBetween, type TempPoint } from "@/lib/fertility";
 import { CycleChart } from "@/components/cycle-chart";
 import { CycleCalendar } from "@/components/cycle-calendar";
 import { RotateCcw } from "lucide-react";
@@ -75,7 +75,7 @@ function Dashboard() {
   const activeCycle = data.activeCycle;
 
   const cycleStart = activeCycle ? new Date(activeCycle.started_on) : new Date();
-  const rawTemps: TempPoint[] = data.activeLogs.map((l: any) => ({
+  const rawTemps: TempPoint[] = data.activeLogs.filter((l: any) => !l.excluded && activeCycle && l.logged_for >= activeCycle.started_on).map((l: any) => ({
     day: Math.floor((new Date(l.logged_for).getTime() - cycleStart.getTime()) / 86400000) + 1,
     temp: Number(l.temp_celsius),
     date: l.logged_for,
@@ -88,6 +88,9 @@ function Dashboard() {
         avgCycleLength: profile.avg_cycle_length,
         periodLength: profile.period_length,
         temps: rawTemps,
+        cycleHistory: data.cycles
+          .filter((c: any) => c.status !== "active" && c.ended_on)
+          .map((c: any) => daysBetween(new Date(c.started_on), new Date(c.ended_on))),
       })
     : null;
 
