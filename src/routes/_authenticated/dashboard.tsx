@@ -170,6 +170,8 @@ function Dashboard() {
         profile={profile}
         activeCycle={activeCycle}
         activeLogs={data.activeLogs}
+        pastCycles={data.cycles}
+        allLogs={data.allLogs}
         onSelectDate={openDay}
       />
 
