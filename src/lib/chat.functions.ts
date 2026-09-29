@@ -94,30 +94,58 @@ export const logTemperatureViaBot = createServerFn({ method: "POST" })
       .order("started_on", { ascending: false })
       .maybeSingle();
 
-    let text = data.tempCelsius.toFixed(2);
-    if (cycle?.started_on) {
-      const start = new Date(`${cycle.started_on}T00:00:00Z`).getTime();
-      const day = Math.round((new Date(`${data.loggedFor}T00:00:00Z`).getTime() - start) / 86400000) + 1;
-      if (day >= 1) text = `d${day} ${data.tempCelsius.toFixed(2)}`;
+    // Find the cycle this date belongs to (could be a past, closed cycle).
+    const { data: owning } = await supabase
+      .from("cycles")
+      .select("id, started_on, ended_on, status")
+      .eq("user_id", userId)
+      .lte("started_on", data.loggedFor)
+      .order("started_on", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const excluded = !!data.sick || !!data.disruptedMorning;
+    // Always save the reading on the exact day tapped, so the calendar never loses it.
+    const { error: upErr } = await supabase.from("temperature_logs").upsert(
+      {
+        user_id: userId,
+        logged_for: data.loggedFor,
+        temp_celsius: data.tempCelsius,
+        cycle_id: owning?.id ?? null,
+        source: "web",
+        excluded,
+        exclude_reason: data.sick ? "fever-or-illness" : data.disruptedMorning ? "disrupted-morning" : null,
+      },
+      { onConflict: "user_id,logged_for" },
+    );
+    if (upErr) throw new Error(upErr.message);
+
+    // Only ask the bot for guidance when the day is in the current cycle.
+    if (!cycle?.started_on || data.loggedFor < cycle.started_on) {
+      return { messages: [], note: "" };
     }
+    const start = new Date(`${cycle.started_on}T00:00:00Z`).getTime();
+    const day = Math.round((new Date(`${data.loggedFor}T00:00:00Z`).getTime() - start) / 86400000) + 1;
+    const text = `d${day} ${data.tempCelsius.toFixed(2)}`;
 
-    const { handleIncomingMessage, prepareWebTempFlags } = await import("./bot.server");
-    // The toggles answer the bot's fever / morning questions up front, so the
-    // algorithm decides straight away instead of asking again in the chat.
-    const botState = await prepareWebTempFlags(profile, data.loggedFor, {
-      sick: !!data.sick,
-      disrupted: !!data.disruptedMorning,
-    });
     const capture: { text?: string; imageUrl?: string }[] = [];
-    await handleIncomingMessage({
-      from: profile.whatsapp_number ? `+${profile.whatsapp_number}` : "+00000000000",
-      waMessageId: `web-temp-${Date.now()}`,
-      text,
-      raw: { source: "web-dashboard" },
-      capture,
-      profileOverride: { ...profile, bot_state: botState },
-    });
-
+    try {
+      const { handleIncomingMessage, prepareWebTempFlags } = await import("./bot.server");
+      const botState = await prepareWebTempFlags(profile, data.loggedFor, {
+        sick: !!data.sick,
+        disrupted: !!data.disruptedMorning,
+      });
+      await handleIncomingMessage({
+        from: profile.whatsapp_number ? `+${profile.whatsapp_number}` : "+00000000000",
+        waMessageId: `web-temp-${Date.now()}`,
+        text,
+        raw: { source: "web-dashboard" },
+        capture,
+        profileOverride: { ...profile, bot_state: botState },
+      });
+    } catch (e) {
+      console.error("bot note failed", e);
+    }
 
     const note = capture.map((m) => m.text).filter(Boolean).join("\n\n").trim();
     if (note) {

@@ -28,11 +28,17 @@ export const getDashboard = createServerFn({ method: "GET" })
         .order("logged_for");
       logs = data ?? [];
     }
+    const { data: allLogs } = await supabase
+      .from("temperature_logs")
+      .select("logged_for, temp_celsius, excluded, cycle_id")
+      .eq("user_id", userId)
+      .order("logged_for");
     return {
       profile: profileRes.data,
       cycles: cyclesRes.data ?? [],
       activeCycle,
       activeLogs: logs,
+      allLogs: allLogs ?? [],
     };
   });
 

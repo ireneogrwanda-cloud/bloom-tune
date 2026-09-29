@@ -10,12 +10,14 @@ export type CycleCalendarProps = {
   profile: CalendarProfile;
   activeCycle: { started_on: string } | null;
   activeLogs: Array<{ logged_for: string; temp_celsius: number | string; excluded?: boolean }>;
+  pastCycles?: Array<{ started_on: string; ended_on: string | null; status: string }>;
+  allLogs?: Array<{ logged_for: string; temp_celsius: number | string; excluded?: boolean }>;
   onSelectDate: (iso: string) => void;
 };
 
 const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 
-export function CycleCalendar({ profile, activeCycle, activeLogs, onSelectDate }: CycleCalendarProps) {
+export function CycleCalendar({ profile, activeCycle, activeLogs, pastCycles = [], allLogs = [], onSelectDate }: CycleCalendarProps) {
   const today = new Date();
   const { t } = useT();
   const [month, setMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
@@ -24,9 +26,28 @@ export function CycleCalendar({ profile, activeCycle, activeLogs, onSelectDate }
 
   const logMap = useMemo(() => {
     const m = new Map<string, number>();
+    for (const l of allLogs) m.set(l.logged_for, Number(l.temp_celsius));
     for (const l of activeLogs) m.set(l.logged_for, Number(l.temp_celsius));
     return m;
-  }, [activeLogs]);
+  }, [activeLogs, allLogs]);
+
+  // Closed cycles keep their colours: re-run the prediction on each finished cycle
+  // using its real length and the readings logged inside it.
+  const past = useMemo(() => {
+    return pastCycles
+      .filter((c) => c.status !== "active" && c.ended_on)
+      .map((c) => {
+        const start = new Date(c.started_on);
+        const end = new Date(c.ended_on!);
+        const length = Math.max(1, cycleDayFor(start, end) - 1);
+        const temps: TempPoint[] = allLogs
+          .filter((l) => !l.excluded && l.logged_for >= c.started_on && l.logged_for < c.ended_on!)
+          .map((l) => ({ day: cycleDayFor(start, new Date(l.logged_for)), temp: Number(l.temp_celsius), date: l.logged_for }));
+        const lastDay = new Date(end.getTime() - 86400000);
+        const s = predictCycle({ cycleStart: start, today: lastDay, avgCycleLength: length, periodLength: profile.period_length, temps });
+        return { start, startIso: c.started_on, endIso: c.ended_on!, length, stats: s };
+      });
+  }, [pastCycles, allLogs, profile.period_length]);
 
   const stats = useMemo(() => {
     if (!cycleStart) return null;
@@ -90,14 +111,19 @@ export function CycleCalendar({ profile, activeCycle, activeLogs, onSelectDate }
         {cells.map((d, i) => {
           if (!d) return <span key={`e${i}`} />;
           const iso = isoDate(d);
-          const day = cycleStart ? cycleDayFor(cycleStart, d) : 0;
-          const kind =
-            stats && cycleStart
-              ? classifyDay({ cycleDay: day, stats, hasLog: logMap.has(iso) })
-              : "outside";
+          const pc = past.find((p) => iso >= p.startIso && iso < p.endIso);
+          const inActive = !!cycleStart && !pc;
+          const day = pc ? cycleDayFor(pc.start, d) : cycleStart ? cycleDayFor(cycleStart, d) : 0;
+          const dayStats = pc ? pc.stats : inActive ? stats : null;
+          let kind: ReturnType<typeof classifyDay> = dayStats
+            ? classifyDay({ cycleDay: day, stats: dayStats, hasLog: logMap.has(iso) })
+            : "outside";
+          // A finished cycle's days are history — show them as confirmed.
+          if (pc && kind === "predicted-fertile") kind = "confirmed-fertile";
+          if (pc && kind === "predicted-infertile") kind = "confirmed-infertile";
           const isToday = isoDate(today) === iso;
-          const isOvulation = !!stats && day === stats.estimatedOvulationDay && day >= 1;
-          const isPredictedBleed = !!stats && day === stats.predictedCycleLength + 1;
+          const isOvulation = !!dayStats && day === dayStats.estimatedOvulationDay && day >= 1 && (!pc || dayStats.ovulationConfirmed);
+          const isPredictedBleed = inActive && !!stats && day === stats.predictedCycleLength + 1;
           const temp = logMap.get(iso);
           // A temperature can only exist for a day that has happened.
           const isFuture = iso > isoDate(today);
