@@ -93,7 +93,7 @@ function Dashboard() {
 
   function openDay(iso: string) {
     if (iso > todayIso) return toast.error(t("You can't log a temperature for a future day."));
-    const existing = data!.activeLogs.find((l: any) => l.logged_for === iso);
+    const existing = (data!.allLogs ?? data!.activeLogs).find((l: any) => l.logged_for === iso);
     setTemp(existing ? Number(existing.temp_celsius).toFixed(2) : "");
     setSick(false);
     setDisrupted(false);
