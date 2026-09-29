@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Egg, Droplet } from "lucide-react";
-import { predictCycle, isoDate, type TempPoint } from "@/lib/fertility";
+import { predictCycle, daysBetween, type TempPoint } from "@/lib/fertility";
 import { classifyDay, cycleDayFor, DAY_STYLES } from "@/lib/day-colors";
 import { useT } from "@/lib/i18n";
 
@@ -16,13 +16,20 @@ export type CycleCalendarProps = {
 };
 
 const WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+const calendarIso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const dateFromIso = (iso: string) => new Date(`${iso}T00:00:00Z`);
 
 export function CycleCalendar({ profile, activeCycle, activeLogs, pastCycles = [], allLogs = [], onSelectDate }: CycleCalendarProps) {
   const today = new Date();
   const { t } = useT();
   const [month, setMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
 
-  const cycleStart = activeCycle ? new Date(activeCycle.started_on) : null;
+  const cycleStart = activeCycle ? dateFromIso(activeCycle.started_on) : null;
+  const todayIso = calendarIso(today);
+  const historyLengths = pastCycles
+    .filter((c) => c.status !== "active" && c.ended_on)
+    .map((c) => daysBetween(dateFromIso(c.started_on), dateFromIso(c.ended_on as string)))
+    .filter((length) => length >= 20 && length <= 45);
 
   const logMap = useMemo(() => {
     const m = new Map<string, number>();
@@ -37,14 +44,17 @@ export function CycleCalendar({ profile, activeCycle, activeLogs, pastCycles = [
     return pastCycles
       .filter((c) => c.status !== "active" && c.ended_on)
       .map((c) => {
-        const start = new Date(c.started_on);
-        const end = new Date(c.ended_on!);
+         const start = dateFromIso(c.started_on);
+         const end = dateFromIso(c.ended_on!);
         const length = Math.max(1, cycleDayFor(start, end) - 1);
         const temps: TempPoint[] = allLogs
           .filter((l) => !l.excluded && l.logged_for >= c.started_on && l.logged_for < c.ended_on!)
-          .map((l) => ({ day: cycleDayFor(start, new Date(l.logged_for)), temp: Number(l.temp_celsius), date: l.logged_for }));
+           .map((l) => ({ day: cycleDayFor(start, dateFromIso(l.logged_for)), temp: Number(l.temp_celsius), date: l.logged_for }));
         const lastDay = new Date(end.getTime() - 86400000);
-        const s = predictCycle({ cycleStart: start, today: lastDay, avgCycleLength: length, periodLength: profile.period_length, temps });
+         const earlierHistory = pastCycles
+           .filter((previous) => previous.status !== "active" && previous.ended_on && previous.ended_on <= c.started_on)
+           .map((previous) => daysBetween(dateFromIso(previous.started_on), dateFromIso(previous.ended_on as string)));
+         const s = predictCycle({ cycleStart: start, today: lastDay, avgCycleLength: length, periodLength: profile.period_length, temps, cycleHistory: earlierHistory });
         return { start, startIso: c.started_on, endIso: c.ended_on!, length, stats: s };
       });
   }, [pastCycles, allLogs, profile.period_length]);
@@ -52,21 +62,22 @@ export function CycleCalendar({ profile, activeCycle, activeLogs, pastCycles = [
   const stats = useMemo(() => {
     if (!cycleStart) return null;
     const temps: TempPoint[] = activeLogs
-      .filter((l) => !l.excluded)
+       .filter((l) => !l.excluded && l.logged_for >= activeCycle!.started_on && l.logged_for <= todayIso)
       .map((l) => ({
-        day: cycleDayFor(cycleStart, new Date(l.logged_for)),
+         day: cycleDayFor(cycleStart, dateFromIso(l.logged_for)),
         temp: Number(l.temp_celsius),
         date: l.logged_for,
       }));
     return predictCycle({
       cycleStart,
-      today,
+       today: dateFromIso(todayIso),
       avgCycleLength: profile.avg_cycle_length,
       periodLength: profile.period_length,
       temps,
+       cycleHistory: historyLengths,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCycle?.started_on, activeLogs, profile.avg_cycle_length, profile.period_length]);
+  }, [activeCycle?.started_on, activeLogs, profile.avg_cycle_length, profile.period_length, pastCycles, todayIso]);
 
   const first = new Date(month.getFullYear(), month.getMonth(), 1);
   const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
@@ -110,23 +121,21 @@ export function CycleCalendar({ profile, activeCycle, activeLogs, pastCycles = [
       <div className="mt-1 grid grid-cols-7 gap-1">
         {cells.map((d, i) => {
           if (!d) return <span key={`e${i}`} />;
-          const iso = isoDate(d);
+           const iso = calendarIso(d);
+           const utcDay = dateFromIso(iso);
           const pc = past.find((p) => iso >= p.startIso && iso < p.endIso);
           const inActive = !!cycleStart && !pc;
-          const day = pc ? cycleDayFor(pc.start, d) : cycleStart ? cycleDayFor(cycleStart, d) : 0;
+           const day = pc ? cycleDayFor(pc.start, utcDay) : cycleStart ? cycleDayFor(cycleStart, utcDay) : 0;
           const dayStats = pc ? pc.stats : inActive ? stats : null;
-          let kind: ReturnType<typeof classifyDay> = dayStats
+           const kind: ReturnType<typeof classifyDay> = dayStats
             ? classifyDay({ cycleDay: day, stats: dayStats, hasLog: logMap.has(iso) })
             : "outside";
-          // A finished cycle's days are history — show them as confirmed.
-          if (pc && kind === "predicted-fertile") kind = "confirmed-fertile";
-          if (pc && kind === "predicted-infertile") kind = "confirmed-infertile";
-          const isToday = isoDate(today) === iso;
+           const isToday = todayIso === iso;
           const isOvulation = !!dayStats && day === dayStats.estimatedOvulationDay && day >= 1 && (!pc || dayStats.ovulationConfirmed);
           const isPredictedBleed = inActive && !!stats && day === stats.predictedCycleLength + 1;
           const temp = logMap.get(iso);
           // A temperature can only exist for a day that has happened.
-          const isFuture = iso > isoDate(today);
+           const isFuture = iso > todayIso;
 
           return (
             <button

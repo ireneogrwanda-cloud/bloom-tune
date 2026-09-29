@@ -21,19 +21,25 @@ export function classifyDay(args: {
   hasLog: boolean;
 }): DayKind {
   const { cycleDay, stats, hasLog } = args;
-  if (cycleDay < 1 || cycleDay > stats.predictedCycleLength + 10) return "outside";
+  if (cycleDay < 1) return "outside";
 
   const fertile = cycleDay >= stats.fertileStartDay && cycleDay <= stats.fertileEndDay;
-
-  // A day is "confirmed" only when it has already happened AND we have enough
-  // evidence: a temperature shift confirmed, or at least medium confidence with
-  // a logged temperature for that day.
   const past = cycleDay <= stats.cycleDay;
-  const certain =
-    past && (stats.ovulationConfirmed || (stats.confidence !== "low" && (hasLog || cycleDay <= stats.cycleDay - 1)));
 
-  if (fertile) return certain ? "confirmed-fertile" : "predicted-fertile";
-  return certain ? "confirmed-infertile" : "predicted-infertile";
+  if (fertile) return past && stats.ovulationConfirmed ? "confirmed-fertile" : "predicted-fertile";
+
+  // A calendar estimate or one logged temperature cannot establish a safe day.
+  // Before the fertile window, require enough cycle history; after it, require
+  // the sustained BBT rise that actually closes the fertile window.
+  const beforeWindow = cycleDay < stats.fertileStartDay;
+  const safelyBeforeWindow = beforeWindow && stats.cyclesAnalyzed >= 3;
+  const safelyAfterWindow = !beforeWindow && stats.ovulationConfirmed;
+  if (safelyBeforeWindow || safelyAfterWindow) {
+    return past ? "confirmed-infertile" : "predicted-infertile";
+  }
+
+  // Uncertain days remain red even if a temperature was recorded for that day.
+  return "predicted-fertile";
 }
 
 export const DAY_STYLES: Record<DayKind, string> = {
