@@ -79,37 +79,15 @@ export const requestWhatsAppCode = createServerFn({ method: "POST" })
     return { ok: true as const, phone: n, message: "" };
   });
 
-export const verifyWhatsAppCode = createServerFn({ method: "POST" })
-  .inputValidator((input: { phone: string; code: string }) =>
-    z.object({ phone: phoneSchema, code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code") }).parse(input),
-  )
+// Direct sign-in with a WhatsApp number — no one-time code. The number itself
+// is the identity: if it matches a synced profile we open that account,
+// otherwise we create one.
+export const signInWithWhatsApp = createServerFn({ method: "POST" })
+  .inputValidator((input: { phone: string }) => z.object({ phone: phoneSchema }).parse(input))
   .handler(async ({ data }) => {
     const n = normalize(data.phone);
+    if (n.length < 7) throw new Error("Enter a valid WhatsApp number with country code.");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-    const { data: row } = await supabaseAdmin
-      .from("wa_otp_codes")
-      .select("*")
-      .eq("phone", n)
-      .is("consumed_at", null)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (!row) throw new Error("No active code. Please request a new one.");
-    if (new Date(row.expires_at).getTime() < Date.now()) throw new Error("That code has expired. Request a new one.");
-    if (row.attempts >= 5) throw new Error("Too many attempts. Please request a new code.");
-
-    const codeHash = await sha256(`${n}:${data.code}`);
-    if (codeHash !== row.code_hash) {
-      await supabaseAdmin
-        .from("wa_otp_codes")
-        .update({ attempts: row.attempts + 1 })
-        .eq("id", row.id);
-      throw new Error("That code is not correct.");
-    }
-
-    await supabaseAdmin.from("wa_otp_codes").update({ consumed_at: new Date().toISOString() }).eq("id", row.id);
 
     // Find or create the account tied to this WhatsApp number.
     const { data: profile } = await supabaseAdmin
