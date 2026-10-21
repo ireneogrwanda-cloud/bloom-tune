@@ -12,9 +12,9 @@ export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
       { title: "Sign in with WhatsApp — My Cycle AI" },
-      { name: "description", content: "Sign in to My Cycle AI with your WhatsApp number and a one-time code." },
+      { name: "description", content: "Sign in to My Cycle AI with just your WhatsApp number." },
       { property: "og:title", content: "Sign in with WhatsApp — My Cycle AI" },
-      { property: "og:description", content: "No password needed — My Cycle AI sends a one-time code to your WhatsApp." },
+      { property: "og:description", content: "No password or code needed — your WhatsApp number is your key." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -24,7 +24,7 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   return (
-    <AuthShell title="Sign in with WhatsApp" subtitle="We'll message you a one-time code — no password needed">
+    <AuthShell title="Sign in with WhatsApp" subtitle="Just your WhatsApp number — no password, no code">
       <WhatsAppOtpForm />
     </AuthShell>
   );
