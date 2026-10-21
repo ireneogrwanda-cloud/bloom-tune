@@ -32,39 +32,18 @@ function LoginPage() {
 
 export function WhatsAppOtpForm() {
   const nav = useNavigate();
-  const sendCode = useServerFn(requestWhatsAppCode);
-  const checkCode = useServerFn(verifyWhatsAppCode);
-  const [step, setStep] = useState<"phone" | "code">("phone");
+  const signIn = useServerFn(signInWithWhatsApp);
   const [phone, setPhone] = useState("");
-  const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function onSendCode(e: React.FormEvent) {
+  async function onSignIn(e: React.FormEvent) {
     e.preventDefault();
     if (!/^\+?\d[\d\s\-()]{6,19}$/.test(phone)) {
       return toast.error("Enter a valid WhatsApp number including country code");
     }
     setLoading(true);
     try {
-      const res = await sendCode({ data: { phone } });
-      if (!res.ok) {
-        toast.error(res.message);
-        return;
-      }
-      toast.success("Code sent to your WhatsApp");
-      setStep("code");
-    } catch (e: any) {
-      toast.error(e?.message ?? "Could not send the code");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function onVerify(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const { tokenHash, isNew } = await checkCode({ data: { phone, code } });
+      const { tokenHash, isNew } = await signIn({ data: { phone } });
       const { error } = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: tokenHash });
       if (error) throw new Error(error.message);
       toast.success(isNew ? "Welcome to My Cycle AI!" : "Welcome back");
@@ -76,58 +55,27 @@ export function WhatsAppOtpForm() {
     }
   }
 
-  if (step === "phone") {
-    return (
-      <form onSubmit={onSendCode} className="space-y-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="phone">WhatsApp number</Label>
-          <Input
-            id="phone"
-            type="tel"
-            autoComplete="tel"
-            placeholder="+1 555 123 4567"
-            required
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-          />
-          <p className="text-xs text-muted-foreground">Include your country code. This is also how the bot knows you.</p>
-        </div>
-        <Button type="submit" disabled={loading} className="w-full">
-          {loading ? "Sending code…" : "Send me a code"}
-        </Button>
-      </form>
-    );
-  }
-
   return (
-    <form onSubmit={onVerify} className="space-y-4">
+    <form onSubmit={onSignIn} className="space-y-4">
       <div className="space-y-1.5">
-        <Label htmlFor="code">6-digit code</Label>
+        <Label htmlFor="phone">WhatsApp number</Label>
         <Input
-          id="code"
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          maxLength={6}
-          placeholder="123456"
+          id="phone"
+          type="tel"
+          autoComplete="tel"
+          placeholder="+1 555 123 4567"
           required
-          value={code}
-          onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
         />
-        <p className="text-xs text-muted-foreground">Sent to {phone} on WhatsApp. It expires in 10 minutes.</p>
+        <p className="text-xs text-muted-foreground">
+          Include your country code. If this number is already synced with the bot, you'll go straight to your account —
+          no code needed.
+        </p>
       </div>
-      <Button type="submit" disabled={loading || code.length !== 6} className="w-full">
-        {loading ? "Checking…" : "Continue"}
+      <Button type="submit" disabled={loading} className="w-full">
+        {loading ? "Signing you in…" : "Continue"}
       </Button>
-      <button
-        type="button"
-        className="w-full text-center text-sm text-muted-foreground hover:underline"
-        onClick={() => {
-          setStep("phone");
-          setCode("");
-        }}
-      >
-        Use a different number
-      </button>
     </form>
   );
 }
