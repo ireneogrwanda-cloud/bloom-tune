@@ -68,7 +68,7 @@ export const requestWhatsAppCode = createServerFn({ method: "POST" })
             ok: false as const,
             phone: n,
             message: notJoined
-              ? "WhatsApp would not deliver the code to this number yet. Open WhatsApp, send the join message to +1 415 523 8886 to connect with My Cycle AI, then try again."
+              ? "This WhatsApp number isn't connected to My Cycle AI's test number yet. Open WhatsApp on this phone and send a message saying 'join' followed by your sandbox word to +1 415 523 8886 (the exact word is in the Twilio console under Messaging → Try it out → Send a WhatsApp message). Once WhatsApp confirms you've joined, come back and request the code again."
               : "WhatsApp could not deliver the code to this number. Please check it and try again.",
           };
         }
