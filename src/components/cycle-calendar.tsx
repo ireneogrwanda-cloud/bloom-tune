@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Egg, Droplet } from "lucide-react";
 import { predictCycle, daysBetween, type TempPoint } from "@/lib/fertility";
 import { classifyDay, cycleDayFor, DAY_STYLES } from "@/lib/day-colors";
@@ -25,6 +25,28 @@ export function CycleCalendar({ profile, activeCycle, activeLogs, pastCycles = [
   const today = new Date();
   const { t } = useT();
   const [month, setMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+
+  const shiftMonth = (delta: number) =>
+    setMonth((m) => new Date(m.getFullYear(), m.getMonth() + delta, 1));
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchStart.current = { x: t.clientX, y: t.clientY };
+  };
+
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const start = touchStart.current;
+    touchStart.current = null;
+    if (!start) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    // Only a clear horizontal swipe changes the month; taps and scrolls are ignored.
+    if (Math.abs(dx) >= 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      shiftMonth(dx < 0 ? 1 : -1);
+    }
+  };
 
   const cycleStart = activeCycle ? dateFromIso(activeCycle.started_on) : null;
   const todayIso = calendarIso(today);
