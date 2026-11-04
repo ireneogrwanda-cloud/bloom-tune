@@ -7,13 +7,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import { useOffline } from "@/lib/offline";
 
 export const Route = createFileRoute("/_authenticated/onboarding")({
-  head: () => ({ meta: [{ title: "Set up your profile — My Cycle AI" }] }),
+  head: () => ({ meta: [
+    { title: "Set up your profile — My Cycle AI" },
+    { name: "description", content: "Set your cycle information and link your WhatsApp number to My Cycle AI." },
+    { property: "og:title", content: "Set up your profile — My Cycle AI" },
+    { property: "og:description", content: "Start tracking with your name, cycle information and WhatsApp number." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary" },
+  ] }),
   component: Onboarding,
 });
 
 function Onboarding() {
+  const { online } = useOffline();
   const nav = useNavigate();
   const submit = useServerFn(completeOnboarding);
   const [displayName, setDisplayName] = useState("");
@@ -35,6 +44,7 @@ function Onboarding() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!online) return toast.error("Connect to finish setting up your account.");
     if (!agree) return toast.error("Please acknowledge the disclaimer.");
     setLoading(true);
     try {
@@ -101,7 +111,7 @@ function Onboarding() {
           <span>I understand My Cycle AI is <strong>not medical advice</strong> and <strong>not a contraceptive method</strong>.</span>
         </label>
 
-        <Button type="submit" disabled={loading} className="w-full">{loading ? "Saving…" : "Finish setup"}</Button>
+        <Button type="submit" disabled={!online || loading} className="w-full">{loading ? "Saving…" : "Finish setup"}</Button>
       </form>
     </div>
   );

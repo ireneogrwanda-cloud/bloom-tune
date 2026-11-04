@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getDashboard, startNewCycle } from "@/lib/profile.functions";
-import { logTemperatureViaBot } from "@/lib/chat.functions";
+import { useQueryClient } from "@tanstack/react-query";
+import { startNewCycle } from "@/lib/profile.functions";
+import { useOffline, useOfflineDashboard } from "@/lib/offline";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,13 +32,13 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 });
 
 function Dashboard() {
-  const fetchDash = useServerFn(getDashboard);
-  const logViaBot = useServerFn(logTemperatureViaBot);
+  const { online, saveTemperature } = useOffline();
   const newCycle = useServerFn(startNewCycle);
   const qc = useQueryClient();
   const { t } = useT();
 
-  const { data, isLoading } = useQuery({ queryKey: ["dashboard"], queryFn: () => fetchDash() });
+  const { data, isLoading } = useOfflineDashboard();
+  const [saving, setSaving] = useState(false);
 
   const [temp, setTemp] = useState("");
   const [sick, setSick] = useState(false);
@@ -59,7 +59,7 @@ function Dashboard() {
   }
 
   if (isLoading) return <p className="text-sm text-muted-foreground">{t("Loading…")}</p>;
-  if (!data) return <p>{t("Failed to load.")}</p>;
+  if (!data) return <p>{t(online ? "Failed to load." : "Connect once to save your calendar on this device.")}</p>;
 
   if (!data.profile?.whatsapp_number) {
     return (
@@ -96,42 +96,43 @@ function Dashboard() {
 
   function openDay(iso: string) {
     if (iso > todayIso) return toast.error(t("You can't log a temperature for a future day."));
-    const existing = (data!.allLogs ?? data!.activeLogs).find((l: any) => l.logged_for === iso);
+    if (!data) return;
+    const existing = (data.allLogs ?? data.activeLogs).find((l: any) => l.logged_for === iso);
     setTemp(existing ? Number(existing.temp_celsius).toFixed(2) : "");
-    setSick(false);
-    setDisrupted(false);
+    setSick(!!existing?.excluded && existing?.exclude_reason === "fever-or-illness");
+    setDisrupted(!!existing?.excluded && existing?.exclude_reason !== "fever-or-illness");
     setPickedDate(iso);
   }
 
   async function saveTemp(e: React.FormEvent) {
     e.preventDefault();
+    if (!pickedDate || saving) return;
     const value = parseFloat(temp);
     if (!isFinite(value) || value < 35 || value > 38)
       return toast.error(t("Enter a temperature between 35.00 and 38.00°C"));
     try {
-      const res = await logViaBot({
-        data: {
-          loggedFor: pickedDate!,
+      setSaving(true);
+      await saveTemperature({
+          loggedFor: pickedDate,
           tempCelsius: Math.round(value * 100) / 100,
           sick,
           disruptedMorning: disrupted,
-        },
       });
-      toast.success(t(res?.note ? "Logged — note sent to your chat" : "Logged"));
+      toast.success(t(online ? "Saved · syncing to your chat" : "Saved on this device · syncs when connected"));
       setPickedDate(null);
       setTemp("");
       setSick(false);
       setDisrupted(false);
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
-      qc.invalidateQueries({ queryKey: ["notifications"] });
-      qc.invalidateQueries({ queryKey: ["chat-history"] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed");
+    } finally {
+      setSaving(false);
     }
   }
 
 
   async function onNewCycle(opts?: { skipConfirm?: boolean }) {
+    if (!online) return toast.error(t("Connect to start a new cycle."));
     if (!opts?.skipConfirm && !confirm(t("Start a new cycle today? Your current cycle will be closed."))) return;
     try {
       await newCycle({ data: { startedOn: isoDate(new Date()) } });
@@ -151,7 +152,7 @@ function Dashboard() {
             WhatsApp: <span className="font-mono">+{profile.whatsapp_number}</span> · {t("Avg cycle")} {profile.avg_cycle_length}d
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => onNewCycle()}>
+        <Button variant="outline" size="sm" disabled={!online} onClick={() => onNewCycle()}>
           <RotateCcw className="mr-1 h-4 w-4" /> {t("New cycle")}
         </Button>
       </div>
@@ -163,7 +164,7 @@ function Dashboard() {
             {t("You're on day")} {stats.cycleDay} — {t("your period is expected around now. Are you bleeding today?")}
           </p>
           <div className="mt-3 flex gap-2">
-            <Button size="sm" onClick={() => onNewCycle({ skipConfirm: true })}>{t("Yes, I'm bleeding")}</Button>
+             <Button size="sm" disabled={!online} onClick={() => onNewCycle({ skipConfirm: true })}>{t("Yes, I'm bleeding")}</Button>
             <Button size="sm" variant="outline" onClick={() => setBleedAsked(true)}>{t("Not yet")}</Button>
           </div>
         </section>
@@ -289,7 +290,7 @@ function Dashboard() {
               ) : null}
             </div>
 
-            <Button type="submit" className="w-full">{t("Save")}</Button>
+            <Button type="submit" disabled={saving} className="w-full">{t(saving ? "Saving…" : "Save")}</Button>
 
           </form>
         </DialogContent>

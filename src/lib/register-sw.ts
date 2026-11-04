@@ -1,21 +1,17 @@
 /** Registers the app service worker only where it is safe (published site, top window). */
+import { blockAppWorker } from "@/lib/pwa-context";
 const SW_URL = "/sw.js";
 
 function isBlockedContext() {
-  if (!import.meta.env.PROD) return true;
-  if (window.self !== window.top) return true;
-  if (new URL(window.location.href).searchParams.get("sw") === "off") return true;
-  const h = window.location.hostname;
-  if (h.startsWith("id-preview--") || h.startsWith("preview--")) return true;
-  const blockedHosts = ["lovableproject.com", "lovableproject-dev.com", "beta.lovable.dev"];
-  return blockedHosts.some((base) => h === base || h.endsWith(`.${base}`));
+  return blockAppWorker(window.location.hostname, import.meta.env.PROD, window.self !== window.top,
+    new URL(window.location.href).searchParams.get("sw") === "off");
 }
 
 async function unregisterApp() {
   const regs = await navigator.serviceWorker.getRegistrations();
   await Promise.allSettled(
     regs
-      .filter((r) => (r.active?.scriptURL ?? r.installing?.scriptURL ?? "").endsWith(SW_URL))
+      .filter((r) => [r.active, r.installing, r.waiting].some((worker) => worker && new URL(worker.scriptURL).pathname === SW_URL))
       .map((r) => r.unregister()),
   );
 }
@@ -26,7 +22,11 @@ export function registerServiceWorker() {
     void unregisterApp();
     return;
   }
-  window.addEventListener("load", () => {
-    void navigator.serviceWorker.register(SW_URL, { scope: "/" }).catch(() => {});
-  });
+  const register = () => {
+    void navigator.serviceWorker.register(SW_URL, { scope: "/" }).then((registration) => {
+      void registration.update();
+    }).catch(() => {});
+  };
+  if (document.readyState === "complete") register();
+  else window.addEventListener("load", register, { once: true });
 }

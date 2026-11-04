@@ -5,6 +5,7 @@ import { getChatHistory, sendChatMessage, type ChatMessage } from "@/lib/chat.fu
 import { Button } from "@/components/ui/button";
 import { Send, Smile, Paperclip, Check, CheckCheck, Clock, ArrowDown } from "lucide-react";
 import { useT } from "@/lib/i18n";
+import { useOffline } from "@/lib/offline";
 
 const WALLPAPER_STYLE = {
   backgroundImage:
@@ -28,6 +29,7 @@ function dayLabel(iso: string) {
 export function ChatPanel() {
   const qc = useQueryClient();
   const { t } = useT();
+  const { online, owner } = useOffline();
   const fetchHistory = useServerFn(getChatHistory);
   const send = useServerFn(sendChatMessage);
   const [draft, setDraft] = useState("");
@@ -38,8 +40,9 @@ export function ChatPanel() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const { data: messages = [], isLoading } = useQuery({
-    queryKey: ["chat-history"],
+    queryKey: ["chat-history", owner],
     queryFn: () => fetchHistory({}),
+    enabled: online && !!owner,
   });
 
   const mutation = useMutation({
@@ -68,7 +71,7 @@ export function ChatPanel() {
 
   function submitText(text: string) {
     const value = text.trim();
-    if (!value || mutation.isPending) return;
+    if (!online || !value || mutation.isPending) return;
     setDraft("");
     setPending(value);
     setAtBottom(true);
@@ -85,12 +88,11 @@ export function ChatPanel() {
         className="relative flex-1 space-y-2 overflow-y-auto px-3 py-4"
         style={WALLPAPER_STYLE}
       >
-        {isLoading ? (
+        {isLoading && online ? (
           <p className="py-10 text-center text-xs text-muted-foreground">{t("Loading your conversation…")}</p>
         ) : messages.length === 0 ? (
           <Bubble side="left">
-            👋 Ask me anything about your cycle, your fertile days or how this app works — or send your morning
-            temperature (e.g. <em>36.52</em>).
+            {t(online ? "Ask me anything about your cycle, your fertile days or how this app works." : "No saved conversation on this device. Connect to load your messages.")}
           </Bubble>
         ) : (
           messages.map((m: ChatMessage) => {
@@ -146,13 +148,14 @@ export function ChatPanel() {
       ) : null}
 
       <div className="border-t bg-background/95 backdrop-blur">
+        {!online && <p className="px-3 pt-2 text-xs text-muted-foreground">{t("Connect to send messages and receive bot replies.")}</p>}
         <div className="flex gap-2 overflow-x-auto px-3 pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {QUICK_REPLIES.map((q) => (
             <button
               key={q}
               type="button"
               onClick={() => submitText(q)}
-              disabled={mutation.isPending}
+              disabled={!online || mutation.isPending}
               className="shrink-0 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium capitalize text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
             >
               {t(q)}
@@ -170,6 +173,7 @@ export function ChatPanel() {
             <Smile className="h-5 w-5 shrink-0 text-muted-foreground" />
             <input
               ref={inputRef}
+              disabled={!online}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               maxLength={500}
@@ -183,7 +187,7 @@ export function ChatPanel() {
             type="submit"
             size="icon"
             className="h-11 w-11 shrink-0 rounded-full"
-            disabled={!draft.trim() || mutation.isPending}
+            disabled={!online || !draft.trim() || mutation.isPending}
             aria-label="Send message"
           >
             <Send className="h-5 w-5" />

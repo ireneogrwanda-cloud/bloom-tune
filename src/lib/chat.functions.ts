@@ -74,6 +74,7 @@ export const logTemperatureViaBot = createServerFn({ method: "POST" })
         // Answers to the "does this reading count?" questions asked in the app.
         sick: z.boolean().optional(),
         disruptedMorning: z.boolean().optional(),
+        requestId: z.string().uuid().optional(),
       })
       .parse(input),
   )
@@ -85,6 +86,12 @@ export const logTemperatureViaBot = createServerFn({ method: "POST" })
     }
     const { data: profile } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
     if (!profile) throw new Error("Profile not found");
+    const messageId = data.requestId ? `web-temp-${data.requestId}` : `web-temp-${Date.now()}`;
+    if (data.requestId) {
+      const { data: processed } = await supabase.from("bot_messages").select("id")
+        .eq("user_id", userId).eq("wa_message_id", messageId).limit(1).maybeSingle();
+      if (processed) return { messages: [], note: "" };
+    }
 
     const { data: cycle } = await supabase
       .from("cycles")
@@ -137,7 +144,7 @@ export const logTemperatureViaBot = createServerFn({ method: "POST" })
       });
       await handleIncomingMessage({
         from: profile.whatsapp_number ? `+${profile.whatsapp_number}` : "+00000000000",
-        waMessageId: `web-temp-${Date.now()}`,
+        waMessageId: messageId,
         text,
         raw: { source: "web-dashboard" },
         capture,
@@ -154,7 +161,7 @@ export const logTemperatureViaBot = createServerFn({ method: "POST" })
         kind: "bbt_logged",
         title: `Temperature logged · ${data.tempCelsius.toFixed(2)}°C`,
         body: note.length > 220 ? `${note.slice(0, 217)}…` : note,
-        dedupe_key: `bbt-logged:${data.loggedFor}:${Date.now()}`,
+        dedupe_key: `bbt-logged:${data.loggedFor}:${data.requestId ?? Date.now()}`,
       });
     }
     return { messages: capture, note };

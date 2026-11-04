@@ -8,9 +8,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useT } from "@/lib/i18n";
+import { useOffline } from "@/lib/offline";
 
 export const Route = createFileRoute("/_authenticated/settings")({
-  head: () => ({ meta: [{ title: "Settings — My Cycle AI" }] }),
+  head: () => ({ meta: [
+    { title: "Settings — My Cycle AI" },
+    { name: "description", content: "Manage your name, WhatsApp number and cycle preferences." },
+    { property: "og:title", content: "Settings — My Cycle AI" },
+    { property: "og:description", content: "Your personal cycle tracking preferences and linked WhatsApp number." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary" },
+  ] }),
   component: SettingsPage,
 });
 
@@ -19,7 +27,8 @@ function SettingsPage() {
   const save = useServerFn(updateProfile);
   const qc = useQueryClient();
   const { t } = useT();
-  const { data, isLoading } = useQuery({ queryKey: ["profile"], queryFn: () => fetchProfile() });
+  const { owner, online } = useOffline();
+  const { data, isLoading } = useQuery({ queryKey: ["profile", owner], queryFn: () => fetchProfile(), enabled: online && !!owner });
 
   const [displayName, setDisplayName] = useState("");
   const [phone, setPhone] = useState("");
@@ -37,6 +46,7 @@ function SettingsPage() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!online) return toast.error(t("Connect to save profile changes."));
     setSaving(true);
     try {
       await save({
@@ -95,7 +105,7 @@ function SettingsPage() {
             <Input id="plen" type="number" min={2} max={10} value={periodLen} onChange={(e) => setPeriodLen(Number(e.target.value))} />
           </div>
         </div>
-        <Button type="submit" disabled={saving} className="w-full">{t(saving ? "Saving…" : "Save changes")}</Button>
+        <Button type="submit" disabled={!online || saving} className="w-full">{t(saving ? "Saving…" : "Save changes")}</Button>
       </form>
     </div>
   );

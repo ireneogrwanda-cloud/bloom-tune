@@ -25,17 +25,31 @@ export default defineConfig({
         workbox: {
           globDirectory: "dist/client",
           globPatterns: ["**/*.{js,css,woff2,png,svg,webmanifest}"],
+          globIgnores: ["firebase-messaging-sw.js"],
+          additionalManifestEntries: [
+            ...["/", "/dashboard", "/history", "/assistant", "/how-it-works", "/fertility", "/settings"].map((path) => ({
+              // A separate URL keeps normal page navigations out of Workbox's
+              // cache-first precache route. Only NetworkFirst fallback uses it.
+              url: `${path}?offline-shell=1`, revision: String(Date.now()),
+            })),
+          ],
+          // HTML is handled by NetworkFirst below, not the precache handler.
+          // These shell-only SSR pages contain no authenticated cycle data.
           navigateFallback: null,
           runtimeCaching: [
             {
-              urlPattern: ({ request, url }) =>
-                request.mode === "navigate" && !url.pathname.startsWith("/~oauth"),
+              urlPattern: ({ request, url, sameOrigin }) =>
+                sameOrigin && request.mode === "navigate" &&
+                !url.pathname.startsWith("/~oauth") && !url.pathname.startsWith("/api/") && !url.pathname.startsWith("/_serverFn/"),
               handler: "NetworkFirst",
-              options: { cacheName: "html-navigations", networkTimeoutSeconds: 5 },
+              options: {
+                cacheName: "html-navigations", networkTimeoutSeconds: 5,
+                precacheFallback: { fallbackURL: "/?offline-shell=1" },
+              },
             },
             {
-              urlPattern: ({ request, sameOrigin }) =>
-                sameOrigin && ["script", "style", "font", "image"].includes(request.destination),
+              urlPattern: ({ url, sameOrigin }) =>
+                sameOrigin && /^\/assets\/[^/]+-[a-zA-Z0-9_-]{8,}\.[^/]+$/.test(url.pathname),
               handler: "CacheFirst",
               options: {
                 cacheName: "static-assets",

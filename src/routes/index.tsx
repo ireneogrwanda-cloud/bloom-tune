@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useInstallPrompt } from "@/hooks/use-install-prompt";
 import { Download, Share, ShieldCheck, CalendarDays, Bot, LineChart } from "lucide-react";
+import { cachedOwner } from "@/lib/offline-store";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -31,6 +32,7 @@ function Home() {
   const nav = useNavigate();
 
   useEffect(() => {
+    if (!navigator.onLine && cachedOwner()) { setAuthed(true); return; }
     supabase.auth.getSession().then(({ data }) => setAuthed(!!data.session));
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => setAuthed(!!session));
     return () => sub.subscription.unsubscribe();
