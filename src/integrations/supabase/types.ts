@@ -281,7 +281,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      record_bleeding_start: { Args: { p_started_on: string }; Returns: string }
     }
     Enums: {
       cycle_status: "active" | "completed" | "archived"

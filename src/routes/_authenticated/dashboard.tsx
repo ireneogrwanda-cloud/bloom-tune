@@ -16,6 +16,7 @@ import { CycleChart } from "@/components/cycle-chart";
 import { CycleCalendar } from "@/components/cycle-calendar";
 import { RotateCcw } from "lucide-react";
 import { useT } from "@/lib/i18n";
+import { validateBleedingDate } from "@/lib/calendar-projection";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -44,6 +45,10 @@ function Dashboard() {
   const [sick, setSick] = useState(false);
   const [disrupted, setDisrupted] = useState(false);
   const [pickedDate, setPickedDate] = useState<string | null>(null);
+  const [bleedingStarted, setBleedingStarted] = useState(false);
+  const [bleedingDialog, setBleedingDialog] = useState(false);
+  const [bleedingDate, setBleedingDate] = useState(isoDate(new Date()));
+  const [savingBleeding, setSavingBleeding] = useState(false);
 
   // "Not yet" only hides the question for today — it comes back each day until
   // bleeding actually starts.
@@ -101,6 +106,7 @@ function Dashboard() {
     setTemp(existing ? Number(existing.temp_celsius).toFixed(2) : "");
     setSick(!!existing?.excluded && existing?.exclude_reason === "fever-or-illness");
     setDisrupted(!!existing?.excluded && existing?.exclude_reason !== "fever-or-illness");
+    setBleedingStarted(false);
     setPickedDate(iso);
   }
 
@@ -131,16 +137,29 @@ function Dashboard() {
   }
 
 
-  async function onNewCycle(opts?: { skipConfirm?: boolean }) {
+  async function recordBleeding(startedOn: string) {
     if (!online) return toast.error(t("Connect to start a new cycle."));
-    if (!opts?.skipConfirm && !confirm(t("Start a new cycle today? Your current cycle will be closed."))) return;
+    if (savingBleeding) return;
     try {
-      await newCycle({ data: { startedOn: isoDate(new Date()) } });
-      toast.success(t("New cycle started"));
-      qc.invalidateQueries({ queryKey: ["dashboard"] });
+      validateBleedingDate(startedOn, todayIso);
+      setSavingBleeding(true);
+      await newCycle({ data: { startedOn } });
+      toast.success(t("Bleeding start saved"));
+      setBleedingDialog(false);
+      setBleedingStarted(false);
+      setPickedDate(null);
+      setBleedDismissed(null);
+      await qc.invalidateQueries({ queryKey: ["dashboard"] });
     } catch (e: any) {
       toast.error(e?.message ?? "Failed");
+    } finally {
+      setSavingBleeding(false);
     }
+  }
+
+  function openBleeding() {
+    setBleedingDate(todayIso);
+    setBleedingDialog(true);
   }
 
   return (
@@ -152,7 +171,7 @@ function Dashboard() {
             WhatsApp: <span className="font-mono">+{profile.whatsapp_number}</span> · {t("Avg cycle")} {profile.avg_cycle_length}d
           </p>
         </div>
-        <Button variant="outline" size="sm" disabled={!online} onClick={() => onNewCycle()}>
+        <Button variant="outline" size="sm" disabled={!online} onClick={openBleeding}>
           <RotateCcw className="mr-1 h-4 w-4" /> {t("New cycle")}
         </Button>
       </div>
@@ -164,7 +183,7 @@ function Dashboard() {
             {t("You're on day")} {stats.cycleDay} — {t("your period is expected around now. Are you bleeding today?")}
           </p>
           <div className="mt-3 flex gap-2">
-             <Button size="sm" disabled={!online} onClick={() => onNewCycle({ skipConfirm: true })}>{t("Yes, I'm bleeding")}</Button>
+             <Button size="sm" disabled={!online || savingBleeding} onClick={openBleeding}>{t("Yes, I'm bleeding")}</Button>
             <Button size="sm" variant="outline" onClick={() => setBleedAsked(true)}>{t("Not yet")}</Button>
           </div>
         </section>
@@ -178,6 +197,22 @@ function Dashboard() {
         allLogs={data.allLogs}
         onSelectDate={openDay}
       />
+
+      <Dialog open={bleedingDialog} onOpenChange={setBleedingDialog}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("When did bleeding start?")}</DialogTitle>
+            <DialogDescription>{t("Choose the first day of your period, even if you forgot to log it then.")}</DialogDescription>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); void recordBleeding(bleedingDate); }}>
+            <div className="space-y-1.5">
+              <Label htmlFor="bleeding-date">{t("Bleeding start date")}</Label>
+              <Input id="bleeding-date" type="date" required max={todayIso} value={bleedingDate} onChange={(event) => setBleedingDate(event.target.value)} />
+            </div>
+            <Button type="submit" className="w-full" disabled={!online || savingBleeding}>{t(savingBleeding ? "Saving…" : "Save bleeding start")}</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {stats && activeCycle && (
         <div className="grid grid-cols-3 gap-2 sm:gap-3">
@@ -247,6 +282,14 @@ function Dashboard() {
               {pickedDate ? new Date(pickedDate).toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" }) : ""}
             </DialogDescription>
           </DialogHeader>
+          <div className="flex items-center justify-between gap-3 border-b pb-3">
+            <Label htmlFor="bleeding-started" className="text-sm font-normal">{t("My period started on this day")}</Label>
+            <Switch id="bleeding-started" disabled={!online || savingBleeding || data.cycles.some((c) => c.started_on === pickedDate)} checked={bleedingStarted || data.cycles.some((c) => c.started_on === pickedDate)} onCheckedChange={setBleedingStarted} />
+          </div>
+          {!online && <p className="text-xs text-muted-foreground">{t("Connect to record a bleeding start.")}</p>}
+          {bleedingStarted ? (
+            <Button className="w-full" disabled={!online || savingBleeding} onClick={() => { if (pickedDate) void recordBleeding(pickedDate); }}>{t(savingBleeding ? "Saving…" : "Save bleeding start")}</Button>
+          ) : (
           <form onSubmit={saveTemp} className="space-y-3">
             <div className="space-y-1.5">
               <Label htmlFor="t">{t("Temperature (°C)")}</Label>
@@ -293,6 +336,7 @@ function Dashboard() {
             <Button type="submit" disabled={saving} className="w-full">{t(saving ? "Saving…" : "Save")}</Button>
 
           </form>
+          )}
         </DialogContent>
       </Dialog>
     </div>

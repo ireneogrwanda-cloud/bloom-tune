@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { validateBleedingDate } from "@/lib/calendar-projection";
 
 export const getDashboard = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -173,14 +174,8 @@ export const startNewCycle = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    await supabase
-      .from("cycles")
-      .update({ status: "completed", ended_on: data.startedOn })
-      .eq("user_id", userId)
-      .eq("status", "active");
-    const { error } = await supabase
-      .from("cycles")
-      .insert({ user_id: userId, started_on: data.startedOn, status: "active" });
+    validateBleedingDate(data.startedOn, new Date().toISOString().slice(0, 10));
+    const { error } = await supabase.rpc("record_bleeding_start", { p_started_on: data.startedOn });
     if (error) throw error;
     return { ok: true };
   });

@@ -3,6 +3,8 @@ import { ChevronLeft, ChevronRight, Egg, Droplet } from "lucide-react";
 import { predictCycle, daysBetween, type TempPoint } from "@/lib/fertility";
 import { classifyDay, cycleDayFor, DAY_STYLES } from "@/lib/day-colors";
 import { useT } from "@/lib/i18n";
+import { projectCalendarDay } from "@/lib/calendar-projection";
+import { Button } from "@/components/ui/button";
 
 export type CalendarProfile = { avg_cycle_length: number; period_length: number };
 
@@ -45,18 +47,20 @@ export function CycleCalendar({ profile, activeCycle, activeLogs, pastCycles = [
       .filter((c) => c.status !== "active" && c.ended_on)
       .map((c) => {
          const start = dateFromIso(c.started_on);
-         const end = dateFromIso(c.ended_on!);
+         const endedOn = c.ended_on;
+         if (!endedOn) return null;
+         const end = dateFromIso(endedOn);
         const length = Math.max(1, cycleDayFor(start, end) - 1);
         const temps: TempPoint[] = allLogs
-          .filter((l) => !l.excluded && l.logged_for >= c.started_on && l.logged_for < c.ended_on!)
+          .filter((l) => !l.excluded && l.logged_for >= c.started_on && l.logged_for < endedOn)
            .map((l) => ({ day: cycleDayFor(start, dateFromIso(l.logged_for)), temp: Number(l.temp_celsius), date: l.logged_for }));
         const lastDay = new Date(end.getTime() - 86400000);
          const earlierHistory = pastCycles
            .filter((previous) => previous.status !== "active" && previous.ended_on && previous.ended_on <= c.started_on)
            .map((previous) => daysBetween(dateFromIso(previous.started_on), dateFromIso(previous.ended_on as string)));
          const s = predictCycle({ cycleStart: start, today: lastDay, avgCycleLength: length, periodLength: profile.period_length, temps, cycleHistory: earlierHistory });
-        return { start, startIso: c.started_on, endIso: c.ended_on!, length, stats: s };
-      });
+        return { start, startIso: c.started_on, endIso: endedOn, length, stats: s };
+      }).filter((cycle) => cycle !== null);
   }, [pastCycles, allLogs, profile.period_length]);
 
   const stats = useMemo(() => {
@@ -91,25 +95,25 @@ export function CycleCalendar({ profile, activeCycle, activeLogs, pastCycles = [
   return (
     <section className="rounded-2xl border bg-card p-4 shadow-sm">
       <header className="mb-3 flex items-center justify-between">
-        <button
+        <Button variant="ghost" size="icon"
           type="button"
           aria-label="Previous month"
           onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}
           className="rounded-full p-1.5 hover:bg-muted"
         >
           <ChevronLeft className="h-4 w-4" />
-        </button>
+        </Button>
         <h2 className="text-sm font-semibold">
           {month.toLocaleDateString([], { month: "long", year: "numeric" })}
         </h2>
-        <button
+        <Button variant="ghost" size="icon"
           type="button"
           aria-label="Next month"
           onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}
           className="rounded-full p-1.5 hover:bg-muted"
         >
           <ChevronRight className="h-4 w-4" />
-        </button>
+        </Button>
       </header>
 
       <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-muted-foreground">
@@ -124,33 +128,37 @@ export function CycleCalendar({ profile, activeCycle, activeLogs, pastCycles = [
            const iso = calendarIso(d);
            const utcDay = dateFromIso(iso);
           const pc = past.find((p) => iso >= p.startIso && iso < p.endIso);
-          const inActive = !!cycleStart && !pc;
-           const day = pc ? cycleDayFor(pc.start, utcDay) : cycleStart ? cycleDayFor(cycleStart, utcDay) : 0;
-          const dayStats = pc ? pc.stats : inActive ? stats : null;
+          const inActive = !!cycleStart && !pc && iso >= (activeCycle?.started_on ?? "");
+          const projection = inActive && cycleStart && stats ? projectCalendarDay({ date: utcDay, today: dateFromIso(todayIso), cycleStart, stats, periodLength: profile.period_length, cycleHistory: historyLengths }) : null;
+           const day = pc ? cycleDayFor(pc.start, utcDay) : projection?.day ?? 0;
+          const dayStats = pc ? pc.stats : projection?.stats ?? null;
            const kind: ReturnType<typeof classifyDay> = dayStats
-            ? classifyDay({ cycleDay: day, stats: dayStats, hasLog: logMap.has(iso) })
+            ? projection?.kind ?? classifyDay({ cycleDay: day, stats: dayStats, hasLog: logMap.has(iso) })
             : "outside";
            const isToday = todayIso === iso;
           const isOvulation = !!dayStats && day === dayStats.estimatedOvulationDay && day >= 1 && (!pc || dayStats.ovulationConfirmed);
-          const isPredictedBleed = inActive && !!stats && day === stats.predictedCycleLength + 1;
+          const isPredictedBleed = !!projection?.bleedingStart;
+          const isRecordedBleed = pastCycles.some((c) => c.started_on === iso) || activeCycle?.started_on === iso;
           const temp = logMap.get(iso);
           // A temperature can only exist for a day that has happened.
            const isFuture = iso > todayIso;
 
           return (
-            <button
+            <Button variant="ghost"
               key={iso}
               type="button"
               disabled={isFuture}
+              data-day-kind={kind}
+              data-cycle-day={day}
               onClick={() => onSelectDate(iso)}
               aria-label={
                 isFuture
                   ? `${d.toLocaleDateString()} — future day`
                   : `${d.toLocaleDateString()} — tap to add temperature`
               }
-              className={`relative flex aspect-square flex-col items-center justify-center rounded-xl text-xs transition-transform active:scale-95 ${DAY_STYLES[kind]} ${
+              className={`relative h-auto w-full aspect-square p-0 flex-col items-center justify-center rounded-lg text-xs transition-transform active:scale-95 ${DAY_STYLES[kind]} ${
                 isToday ? "ring-2 ring-primary ring-offset-1 ring-offset-card" : ""
-              } ${isFuture ? "cursor-not-allowed opacity-40" : ""}`}
+              } ${isFuture ? "cursor-not-allowed disabled:opacity-100" : ""}`}
             >
 
               <span className="font-semibold leading-none">{d.getDate()}</span>
@@ -158,20 +166,20 @@ export function CycleCalendar({ profile, activeCycle, activeLogs, pastCycles = [
                 <span className="mt-0.5 text-[9px] leading-none opacity-80">d{day}</span>
               ) : null}
               {isOvulation ? <Egg className="absolute right-0.5 top-0.5 h-3 w-3 opacity-90" /> : null}
-              {isPredictedBleed ? (
-                <Droplet className="absolute right-0.5 top-0.5 h-3 w-3 fill-rose-500 text-rose-600" />
+              {isPredictedBleed || isRecordedBleed ? (
+                <Droplet aria-label={isRecordedBleed ? t("Bleeding started") : t("Expected bleeding")} className="absolute right-0.5 top-0.5 h-3 w-3 fill-current text-destructive" />
               ) : null}
               {temp ? <span className="mt-0.5 text-[8px] leading-none opacity-80">{temp.toFixed(2)}</span> : null}
-            </button>
+            </Button>
           );
         })}
       </div>
 
       <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
-        <Legend className="bg-emerald-600" label={t("Infertile — confirmed")} />
-        <Legend className="bg-emerald-100" label={t("Infertile — predicted")} />
-        <Legend className="bg-rose-600" label={t("Fertile — confirmed")} />
-        <Legend className="bg-rose-200" label={t("Fertile — predicted")} />
+        <Legend className="bg-cycle-infertile" label={t("Infertile — confirmed")} />
+        <Legend className="bg-cycle-infertile-predicted" label={t("Infertile — predicted")} />
+        <Legend className="bg-cycle-fertile" label={t("Fertile — confirmed")} />
+        <Legend className="bg-cycle-fertile-predicted" label={t("Fertile — predicted")} />
         <span className="inline-flex items-center gap-1">
           <Egg className="h-3 w-3" /> Ovulation day
         </span>

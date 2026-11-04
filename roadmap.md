@@ -1,4 +1,8 @@
 # Offline PWA
+- [x] Add bleeding-started toggle on calendar dates with backdated cycle boundaries and retained readings.
+- [x] Extend predicted fertility colours and bleeding markers across future months; refresh from readings.
+- [x] Test bleeding-date validation and future projections; all 16 tests pass.
+- [ ] Verify saving a bleeding start and calendar controls in the signed-in app; waits on user signing in (no matching managed session).
 - [x] Cache published app pages safely without registering in previews.
 - [x] Restore this device's signed-in calendar, charts and previously loaded history offline.
 - [x] Queue valid temperature entries, update local predictions and synchronize when connected.
