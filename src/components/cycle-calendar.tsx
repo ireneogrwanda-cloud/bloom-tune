@@ -115,7 +115,11 @@ export function CycleCalendar({ profile, activeCycle, activeLogs, pastCycles = [
   ];
 
   return (
-    <section className="rounded-2xl border bg-card p-4 shadow-sm">
+    <section
+      className="rounded-2xl border bg-card p-4 shadow-sm"
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+    >
       <header className="mb-3 flex items-center justify-between">
         <Button variant="ghost" size="icon"
           type="button"
