@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { acknowledgeTemperature, clearOfflineOwner, mergeTemperatures, offlineKey, pendingTemperatures, queueTemperature, validateTemperature, type DashboardData } from "./offline-store";
 import { blockAppWorker } from "./pwa-context";
-import { detectOvulation } from "./fertility";
+import { confirmLutealPhase } from "./fertility";
 
 const entry = { loggedFor: "2026-11-04", tempCelsius: 36.72, sick: false, disruptedMorning: false };
 beforeEach(() => {
@@ -63,9 +63,9 @@ describe("offline temperature rules", () => {
     }));
     const data = { profile: null, cycles: [{ id: "cycle", started_on: "2026-10-01", ended_on: null }], activeCycle: { id: "cycle", started_on: "2026-10-01" }, activeLogs: logs, allLogs: logs } as unknown as DashboardData;
     const points = (d: DashboardData) => d.activeLogs.filter((l) => !l.excluded).map((l, index) => ({ day: index + 1, temp: Number(l.temp_celsius), date: l.logged_for }));
-    expect(detectOvulation(points(data))).toBeNull();
+    expect(confirmLutealPhase(points(data)).confirmed).toBe(false);
     const merged = mergeTemperatures(data, [{ ...entry, loggedFor: "2026-10-09", tempCelsius: 36.5, revision: "rise" }]);
-    expect(detectOvulation(points(merged))).toBe(6);
+    expect(confirmLutealPhase(points(merged)).confirmed).toBe(true);
     expect(merged.activeLogs).toHaveLength(9);
   });
 });
