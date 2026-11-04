@@ -92,8 +92,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:site", content: "@Lovable" },
       { name: "twitter:title", content: "My Og Cycle" },
       { name: "twitter:description", content: "Cycle Companion is a WhatsApp chatbot that predicts fertility and infertility windows based on daily temperature input." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/7ea29d1d-7480-4d94-ab2e-35ee6018b9c5/id-preview-912faa13--af3e43a7-a06b-426e-8915-5974f11140dc.lovable.app-1779864824862.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/7ea29d1d-7480-4d94-ab2e-35ee6018b9c5/id-preview-912faa13--af3e43a7-a06b-426e-8915-5974f11140dc.lovable.app-1779864824862.png" },
     ],
     links: [
       {
