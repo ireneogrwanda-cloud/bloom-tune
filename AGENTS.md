@@ -3,3 +3,5 @@
 - Persist approved private reads under an authenticated owner ID, clear them on explicit sign-out, and never use a cached owner as server authorization.
 - Queue temperature writes durably before reporting success, overlay them on cached dashboard data, and replay only through the existing authenticated temperature function.
 - Keep shared offline session, connection and synchronization state in the authenticated layout so dashboard, history and assistant use the same owner.
+- Record bleeding dates through an authenticated transactional database function that splits the owning cycle and reassigns readings without deletion.
+- Future calendar cycles are view-only projections from the shared prediction model, never actual cycle rows or confirmed statuses.
