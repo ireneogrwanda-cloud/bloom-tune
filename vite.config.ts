@@ -27,13 +27,11 @@ export default defineConfig({
           globPatterns: ["**/*.{js,css,woff2,png,svg,webmanifest}"],
           globIgnores: ["firebase-messaging-sw.js"],
           additionalManifestEntries: [
-            { url: "/", revision: null },
-            { url: "/dashboard", revision: null },
-            { url: "/history", revision: null },
-            { url: "/assistant", revision: null },
-            { url: "/how-it-works", revision: null },
-            { url: "/fertility", revision: null },
-            { url: "/settings", revision: null },
+            ...["/", "/dashboard", "/history", "/assistant", "/how-it-works", "/fertility", "/settings"].map((path) => ({
+              // A separate URL keeps normal page navigations out of Workbox's
+              // cache-first precache route. Only NetworkFirst fallback uses it.
+              url: `${path}?offline-shell=1`, revision: String(Date.now()),
+            })),
           ],
           // HTML is handled by NetworkFirst below, not the precache handler.
           // These shell-only SSR pages contain no authenticated cycle data.
