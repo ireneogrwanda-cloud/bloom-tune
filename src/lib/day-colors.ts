@@ -26,7 +26,10 @@ export function classifyDay(args: {
   const fertile = cycleDay >= stats.fertileStartDay && cycleDay <= stats.fertileEndDay;
   const past = cycleDay <= stats.cycleDay;
 
-  if (fertile) return past && stats.ovulationConfirmed ? "confirmed-fertile" : "predicted-fertile";
+  // A day with a logged temperature is real data, not a forecast: paint it with
+  // the solid confirmed colors. Predicted (light) colors are only for days
+  // without a reading — today and the future.
+  if (fertile) return hasLog || (past && stats.ovulationConfirmed) ? "confirmed-fertile" : "predicted-fertile";
 
   // A calendar estimate or one logged temperature cannot establish a safe day.
   // Before the fertile window, require enough cycle history; after it, require
@@ -35,7 +38,7 @@ export function classifyDay(args: {
   const safelyBeforeWindow = beforeWindow && stats.cyclesAnalyzed >= 3;
   const safelyAfterWindow = !beforeWindow && stats.ovulationConfirmed;
   if (safelyBeforeWindow || safelyAfterWindow) {
-    return past ? "confirmed-infertile" : "predicted-infertile";
+    return hasLog || past ? "confirmed-infertile" : "predicted-infertile";
   }
 
   // Uncertain days remain red even if a temperature was recorded for that day.

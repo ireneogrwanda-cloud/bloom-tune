@@ -4,9 +4,9 @@ import { classifyDay, type DayKind } from "./day-colors";
 const DAY = 86400000;
 export function projectCalendarDay(args: {
   date: Date; today: Date; cycleStart: Date; stats: CycleStats;
-  periodLength: number; cycleHistory: number[];
+  periodLength: number; cycleHistory: number[]; hasLog?: boolean;
 }): { day: number; stats: CycleStats; projected: boolean; bleedingStart: boolean; kind: DayKind } {
-  const { date, today, cycleStart, stats, periodLength, cycleHistory } = args;
+  const { date, today, cycleStart, stats, periodLength, cycleHistory, hasLog = false } = args;
   const absoluteDay = daysBetween(cycleStart, date) + 1;
   // BBT can move the current cycle's next-period estimate. Future cycles still
   // use the historical average; a forecast never inserts a real cycle.
@@ -18,7 +18,7 @@ export function projectCalendarDay(args: {
   if (date.getTime() < firstForecast) return {
     day: absoluteDay, stats, projected: false,
     bleedingStart: date.getTime() === expectedStart,
-    kind: classifyDay({ cycleDay: absoluteDay, stats, hasLog: false }),
+    kind: classifyDay({ cycleDay: absoluteDay, stats, hasLog }),
   };
   const length = Math.max(20, Math.min(45, stats.predictedCycleLength));
   const offset = daysBetween(new Date(firstForecast), date);
