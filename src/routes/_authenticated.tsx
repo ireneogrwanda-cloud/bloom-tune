@@ -9,16 +9,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { LANGUAGES, useT } from "@/lib/i18n";
 import { setAppLanguage } from "@/lib/translate.functions";
 import { useServerFn } from "@tanstack/react-start";
+import { OfflineProvider, useOffline } from "@/lib/offline";
+import { cachedOwner } from "@/lib/offline-store";
+import { OfflineStatus } from "@/components/offline-status";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   beforeLoad: async () => {
+    if (!navigator.onLine && cachedOwner()) return;
     // Trust the stored session first: it survives reloads and is refreshed
     // automatically, so a slow or failed network call never signs anyone out.
     const { data } = await supabase.auth.getSession();
     if (!data.session) throw redirect({ to: "/login" });
   },
-  component: AuthLayout,
+  component: () => <OfflineProvider><AuthLayout /></OfflineProvider>,
 });
 
 const MENU = [
@@ -34,6 +38,7 @@ function AuthLayout() {
   const [open, setOpen] = useState(false);
   const { t, lang, setLang } = useT();
   const saveLang = useServerFn(setAppLanguage);
+  const { online, pending, forget } = useOffline();
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
@@ -44,7 +49,9 @@ function AuthLayout() {
   }, [nav]);
 
   async function signOut() {
-    await supabase.auth.signOut();
+    if (pending.length && !confirm(t("Signing out will remove temperatures saved only on this device. Continue?"))) return;
+    forget();
+    await supabase.auth.signOut({ scope: "local" });
     nav({ to: "/" });
   }
 
@@ -142,6 +149,7 @@ function AuthLayout() {
         </div>
         </div>
       </header>
+      <OfflineStatus />
       <main className="container mx-auto px-4 py-6"><Outlet /></main>
       <footer className="mt-12 border-t bg-muted/30">
         <div className="container mx-auto px-6 py-4 text-xs text-muted-foreground">

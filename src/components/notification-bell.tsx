@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { listNotifications, markNotificationsRead, registerPushToken } from "@/lib/notifications.functions";
 import { enablePush, pushConfigured } from "@/lib/push";
+import { useOffline } from "@/lib/offline";
 
 function localToday() {
   const d = new Date();
@@ -25,6 +26,7 @@ function timeAgo(iso: string) {
 
 export function NotificationBell({ tone = "light" }: { tone?: "light" | "dark" }) {
   const qc = useQueryClient();
+  const { owner, online } = useOffline();
   const navigate = useNavigate();
   const fetchList = useServerFn(listNotifications);
   const markRead = useServerFn(markNotificationsRead);
@@ -32,8 +34,9 @@ export function NotificationBell({ tone = "light" }: { tone?: "light" | "dark" }
   const [open, setOpen] = useState(false);
 
   const { data: items = [] } = useQuery({
-    queryKey: ["notifications"],
+    queryKey: ["notifications", owner],
     queryFn: () => fetchList({ data: { todayIso: localToday() } }),
+    enabled: online && !!owner,
     refetchInterval: 5 * 60 * 1000,
     refetchOnWindowFocus: true,
   });
@@ -47,12 +50,12 @@ export function NotificationBell({ tone = "light" }: { tone?: "light" | "dark" }
 
   // Re-register the device token on load so pushes keep working after reinstalls.
   useEffect(() => {
-    if (!pushConfigured() || typeof window === "undefined") return;
+    if (!online || !pushConfigured() || typeof window === "undefined") return;
     if (!("Notification" in window) || Notification.permission !== "granted") return;
     void enablePush().then((r) => {
       if (r.status === "registered") void saveToken({ data: { token: r.token } });
     });
-  }, [saveToken]);
+  }, [saveToken, online]);
 
   async function turnOnPush() {
     const r = await enablePush();
@@ -75,7 +78,7 @@ export function NotificationBell({ tone = "light" }: { tone?: "light" | "dark" }
       open={open}
       onOpenChange={(v) => {
         setOpen(v);
-        if (v && unread.length) mark.mutate();
+        if (online && v && unread.length) mark.mutate();
       }}
     >
       <PopoverTrigger asChild>
@@ -95,14 +98,14 @@ export function NotificationBell({ tone = "light" }: { tone?: "light" | "dark" }
         <div className="flex items-center justify-between border-b px-4 py-2.5">
           <p className="text-sm font-semibold">Notifications</p>
           {items.length ? (
-            <button className="text-xs text-muted-foreground hover:underline" onClick={() => mark.mutate()}>
+            <button disabled={!online} className="text-xs text-muted-foreground hover:underline" onClick={() => mark.mutate()}>
               <Check className="mr-1 inline h-3 w-3" />
               Mark all read
             </button>
           ) : null}
         </div>
 
-        {canAskPush ? (
+        {canAskPush && online ? (
           <div className="border-b bg-emerald-50 px-4 py-3 text-emerald-900">
             <p className="text-xs font-medium">Get these on your phone</p>
             <p className="mt-0.5 text-[11px] text-emerald-800/80">Morning reminders and fertile-window alerts, even when the app is closed.</p>

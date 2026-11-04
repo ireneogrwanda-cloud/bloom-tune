@@ -25,17 +25,42 @@ export default defineConfig({
         workbox: {
           globDirectory: "dist/client",
           globPatterns: ["**/*.{js,css,woff2,png,svg,webmanifest}"],
+          globIgnores: ["firebase-messaging-sw.js"],
+          additionalManifestEntries: [
+            { url: "/", revision: null },
+            { url: "/dashboard", revision: null },
+            { url: "/history", revision: null },
+            { url: "/assistant", revision: null },
+            { url: "/how-it-works", revision: null },
+            { url: "/fertility", revision: null },
+            { url: "/settings", revision: null },
+          ],
+          // HTML is handled by NetworkFirst below, not the precache handler.
+          // These shell-only SSR pages contain no authenticated cycle data.
           navigateFallback: null,
           runtimeCaching: [
             {
-              urlPattern: ({ request, url }) =>
-                request.mode === "navigate" && !url.pathname.startsWith("/~oauth"),
+              urlPattern: ({ request, url, sameOrigin }) =>
+                sameOrigin && request.mode === "navigate" &&
+                !url.pathname.startsWith("/~oauth") && !url.pathname.startsWith("/api/") && !url.pathname.startsWith("/_serverFn/"),
               handler: "NetworkFirst",
-              options: { cacheName: "html-navigations", networkTimeoutSeconds: 5 },
+              options: {
+                cacheName: "html-navigations", networkTimeoutSeconds: 5,
+                plugins: [{
+                  handlerDidError: async ({ request }) => {
+                    // Installation precaches the public HTML shell for each
+                    // supported offline page; private reads live in owner storage.
+                    const path = new URL(request.url).pathname;
+                    const response = await caches.match(path, { ignoreSearch: true });
+                    if (response) return response;
+                    return Response.error();
+                  },
+                }],
+              },
             },
             {
-              urlPattern: ({ request, sameOrigin }) =>
-                sameOrigin && ["script", "style", "font", "image"].includes(request.destination),
+              urlPattern: ({ url, sameOrigin }) =>
+                sameOrigin && /^\/assets\/[^/]+-[a-zA-Z0-9_-]{8,}\.[^/]+$/.test(url.pathname),
               handler: "CacheFirst",
               options: {
                 cacheName: "static-assets",

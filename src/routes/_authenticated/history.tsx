@@ -1,7 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
-import { getDashboard } from "@/lib/profile.functions";
+import { useOfflineDashboard } from "@/lib/offline";
 import { CycleChart } from "@/components/cycle-chart";
 import { useT } from "@/lib/i18n";
 
@@ -20,9 +18,8 @@ export const Route = createFileRoute("/_authenticated/history")({
 });
 
 function HistoryPage() {
-  const fetchDash = useServerFn(getDashboard);
   const { t } = useT();
-  const { data, isLoading } = useQuery({ queryKey: ["dashboard"], queryFn: () => fetchDash() });
+  const { data, isLoading } = useOfflineDashboard();
 
   if (isLoading) return <p className="text-sm text-muted-foreground">{t("Loading…")}</p>;
   if (!data?.profile) return <p className="text-sm text-muted-foreground">{t("Nothing tracked yet.")}</p>;
