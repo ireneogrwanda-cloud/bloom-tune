@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { acknowledgeTemperature, clearOfflineOwner, mergeTemperatures, offlineKey, pendingTemperatures, queueTemperature, validateTemperature, type DashboardData } from "./offline-store";
 import { blockAppWorker } from "./pwa-context";
+import { detectOvulation } from "./fertility";
 
 const entry = { loggedFor: "2026-11-04", tempCelsius: 36.72, sick: false, disruptedMorning: false };
 beforeEach(() => {
@@ -55,6 +56,17 @@ describe("offline temperature rules", () => {
       expect(merged.activeLogs[0].excluded).toBe(true);
       expect(merged.allLogs[0].temp_celsius).toBe(36.72);
     }
+  });
+  it("recalculates ovulation from queued readings before reconnecting", () => {
+    const logs = [36.2, 36.25, 36.21, 36.23, 36.24, 36.22, 36.4, 36.45].map((temp_celsius, index) => ({
+      logged_for: `2026-10-${String(index + 1).padStart(2, "0")}`, temp_celsius, excluded: false, cycle_id: "cycle", exclude_reason: null,
+    }));
+    const data = { profile: null, cycles: [{ id: "cycle", started_on: "2026-10-01", ended_on: null }], activeCycle: { id: "cycle", started_on: "2026-10-01" }, activeLogs: logs, allLogs: logs } as unknown as DashboardData;
+    const points = (d: DashboardData) => d.activeLogs.filter((l) => !l.excluded).map((l, index) => ({ day: index + 1, temp: Number(l.temp_celsius), date: l.logged_for }));
+    expect(detectOvulation(points(data))).toBeNull();
+    const merged = mergeTemperatures(data, [{ ...entry, loggedFor: "2026-10-09", tempCelsius: 36.5, revision: "rise" }]);
+    expect(detectOvulation(points(merged))).toBe(6);
+    expect(merged.activeLogs).toHaveLength(9);
   });
 });
 
