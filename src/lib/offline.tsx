@@ -46,6 +46,7 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
         qc.clear();
         // Keep unsent readings isolated to their owner on an account switch.
       }
+      setSyncError(false);
       ownerRef.current = id;
       setOwner(id);
       if (id) {

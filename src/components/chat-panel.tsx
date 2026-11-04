@@ -88,12 +88,11 @@ export function ChatPanel() {
         className="relative flex-1 space-y-2 overflow-y-auto px-3 py-4"
         style={WALLPAPER_STYLE}
       >
-        {isLoading ? (
+        {isLoading && online ? (
           <p className="py-10 text-center text-xs text-muted-foreground">{t("Loading your conversation…")}</p>
         ) : messages.length === 0 ? (
           <Bubble side="left">
-            👋 Ask me anything about your cycle, your fertile days or how this app works — or send your morning
-            temperature (e.g. <em>36.52</em>).
+            {t(online ? "Ask me anything about your cycle, your fertile days or how this app works." : "No saved conversation on this device. Connect to load your messages.")}
           </Bubble>
         ) : (
           messages.map((m: ChatMessage) => {
