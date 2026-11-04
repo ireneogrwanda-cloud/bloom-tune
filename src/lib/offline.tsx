@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getDashboard } from "@/lib/profile.functions";
 import { logTemperatureViaBot } from "@/lib/chat.functions";
 import { isoDate } from "@/lib/fertility";
-import { acknowledgeTemperature, cachedOwner, clearOfflineOwner, mergeTemperatures, offlineKey, OWNER_KEY, pendingTemperatures, queueTemperature, readLocal, type DashboardData, type PendingTemperature, type TemperatureEntry } from "@/lib/offline-store";
+import { acknowledgeTemperature, cachedOwner, clearOfflineOwner, mergeTemperatures, offlineKey, OWNER_KEY, pendingTemperatures, queueTemperature, readLocal, type PendingTemperature, type TemperatureEntry } from "@/lib/offline-store";
 
 type OfflineContext = {
   owner: string;
@@ -62,7 +62,8 @@ export function OfflineProvider({ children }: { children: React.ReactNode }) {
     // never passed as authorization to any server function.
     const previous = cachedOwner();
     if (!navigator.onLine && previous) activate(previous);
-    void supabase.auth.getSession().then(({ data }) => activate(data.session?.user.id ?? (!navigator.onLine ? previous ?? "" : "")));
+    void supabase.auth.getSession().then(({ data }) => activate(data.session?.user.id ?? (!navigator.onLine ? previous ?? "" : "")))
+      .catch(() => activate(!navigator.onLine ? previous ?? "" : ""));
     const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_OUT") {
         if (ownerRef.current) clearOfflineOwner(ownerRef.current);

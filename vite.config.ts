@@ -44,16 +44,7 @@ export default defineConfig({
               handler: "NetworkFirst",
               options: {
                 cacheName: "html-navigations", networkTimeoutSeconds: 5,
-                plugins: [{
-                  handlerDidError: async ({ request }) => {
-                    // Installation precaches the public HTML shell for each
-                    // supported offline page; private reads live in owner storage.
-                    const path = new URL(request.url).pathname;
-                    const response = await caches.match(path, { ignoreSearch: true });
-                    if (response) return response;
-                    return Response.error();
-                  },
-                }],
+                precacheFallback: { fallbackURL: "/?offline-shell=1" },
               },
             },
             {

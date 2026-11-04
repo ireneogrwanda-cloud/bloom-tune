@@ -38,7 +38,7 @@ function AuthLayout() {
   const [open, setOpen] = useState(false);
   const { t, lang, setLang } = useT();
   const saveLang = useServerFn(setAppLanguage);
-  const { online, pending, forget } = useOffline();
+  const { pending, forget } = useOffline();
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {

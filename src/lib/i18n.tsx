@@ -55,7 +55,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const flush = useCallback(
     async (target: string) => {
       const texts = Array.from(pending.current).slice(0, 60);
-      if (!texts.length || target === "English") return;
+      if (!texts.length || target === "English" || !navigator.onLine) return;
       texts.forEach((x) => {
         pending.current.delete(x);
         inFlight.current.add(x);
