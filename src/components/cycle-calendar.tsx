@@ -129,7 +129,7 @@ export function CycleCalendar({ profile, activeCycle, activeLogs, pastCycles = [
            const utcDay = dateFromIso(iso);
           const pc = past.find((p) => iso >= p.startIso && iso < p.endIso);
           const inActive = !!cycleStart && !pc && iso >= (activeCycle?.started_on ?? "");
-          const projection = inActive && cycleStart && stats ? projectCalendarDay({ date: utcDay, today: dateFromIso(todayIso), cycleStart, stats, periodLength: profile.period_length, cycleHistory: historyLengths }) : null;
+          const projection = inActive && cycleStart && stats ? projectCalendarDay({ date: utcDay, today: dateFromIso(todayIso), cycleStart, stats, periodLength: profile.period_length, cycleHistory: historyLengths, hasLog: logMap.has(iso) }) : null;
            const day = pc ? cycleDayFor(pc.start, utcDay) : projection?.day ?? 0;
           const dayStats = pc ? pc.stats : projection?.stats ?? null;
            const kind: ReturnType<typeof classifyDay> = dayStats

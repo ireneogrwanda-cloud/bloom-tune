@@ -18,7 +18,7 @@ export function projectCalendarDay(args: {
   if (date.getTime() < firstForecast) return {
     day: absoluteDay, stats, projected: false,
     bleedingStart: date.getTime() === expectedStart,
-    kind: classifyDay({ cycleDay: absoluteDay, stats, hasLog: false }),
+    kind: classifyDay({ cycleDay: absoluteDay, stats, hasLog }),
   };
   const length = Math.max(20, Math.min(45, stats.predictedCycleLength));
   const offset = daysBetween(new Date(firstForecast), date);
