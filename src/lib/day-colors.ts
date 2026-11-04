@@ -43,10 +43,10 @@ export function classifyDay(args: {
 }
 
 export const DAY_STYLES: Record<DayKind, string> = {
-  "confirmed-fertile": "bg-rose-600 text-white",
-  "predicted-fertile": "bg-rose-200 text-rose-900",
-  "confirmed-infertile": "bg-emerald-600 text-white",
-  "predicted-infertile": "bg-emerald-100 text-emerald-900",
+  "confirmed-fertile": "bg-cycle-fertile text-cycle-solid-foreground hover:bg-cycle-fertile",
+  "predicted-fertile": "bg-cycle-fertile-predicted text-cycle-fertile-foreground hover:bg-cycle-fertile-predicted",
+  "confirmed-infertile": "bg-cycle-infertile text-cycle-solid-foreground hover:bg-cycle-infertile",
+  "predicted-infertile": "bg-cycle-infertile-predicted text-cycle-infertile-foreground hover:bg-cycle-infertile-predicted",
   outside: "bg-muted/40 text-muted-foreground",
 };
 
