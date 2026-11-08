@@ -46,16 +46,19 @@ export const sendChatMessage = createServerFn({ method: "POST" })
     if (error) throw error;
     if (!profile) throw new Error("Profile not found");
 
-    const { handleIncomingMessage } = await import("./bot.server");
+    const [{ handleIncomingMessage }, { withBotDatabase }] = await Promise.all([
+      import("./bot.server"),
+      import("./bot-context.server"),
+    ]);
     const capture: { text?: string; imageUrl?: string }[] = [];
-    await handleIncomingMessage({
+    await withBotDatabase(supabase, () => handleIncomingMessage({
       from: profile.whatsapp_number ? `+${profile.whatsapp_number}` : "+00000000000",
       waMessageId: `web-${Date.now()}`,
       text: data.text,
       raw: { source: "web" },
       capture,
       profileOverride: profile,
-    });
+    }));
     return { messages: capture };
   });
 
@@ -137,18 +140,23 @@ export const logTemperatureViaBot = createServerFn({ method: "POST" })
 
     const capture: { text?: string; imageUrl?: string }[] = [];
     try {
-      const { handleIncomingMessage, prepareWebTempFlags } = await import("./bot.server");
-      const botState = await prepareWebTempFlags(profile, data.loggedFor, {
-        sick: !!data.sick,
-        disrupted: !!data.disruptedMorning,
-      });
-      await handleIncomingMessage({
-        from: profile.whatsapp_number ? `+${profile.whatsapp_number}` : "+00000000000",
-        waMessageId: messageId,
-        text,
-        raw: { source: "web-dashboard" },
-        capture,
-        profileOverride: { ...profile, bot_state: botState },
+      const [{ handleIncomingMessage, prepareWebTempFlags }, { withBotDatabase }] = await Promise.all([
+        import("./bot.server"),
+        import("./bot-context.server"),
+      ]);
+      await withBotDatabase(supabase, async () => {
+        const botState = await prepareWebTempFlags(profile, data.loggedFor, {
+          sick: !!data.sick,
+          disrupted: !!data.disruptedMorning,
+        });
+        await handleIncomingMessage({
+          from: profile.whatsapp_number ? `+${profile.whatsapp_number}` : "+00000000000",
+          waMessageId: messageId,
+          text,
+          raw: { source: "web-dashboard" },
+          capture,
+          profileOverride: { ...profile, bot_state: botState },
+        });
       });
     } catch (e) {
       console.error("bot note failed", e);

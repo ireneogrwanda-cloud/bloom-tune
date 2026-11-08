@@ -10,6 +10,8 @@ import { VitePWA } from "vite-plugin-pwa";
 // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
 // @cloudflare/vite-plugin builds from this — wrangler.jsonc main alone is insufficient.
 export default defineConfig({
+  // Vercel sets VERCEL=1 during its build; Lovable keeps its managed runtime.
+  nitro: { preset: process.env.VERCEL ? "vercel" : "cloudflare-module" },
   tanstackStart: {
     server: { entry: "server" },
   },

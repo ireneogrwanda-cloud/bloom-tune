@@ -281,6 +281,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_legacy_phone_account: { Args: never; Returns: boolean }
       record_bleeding_start: { Args: { p_started_on: string }; Returns: string }
     }
     Enums: {

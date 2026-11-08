@@ -1,8 +1,7 @@
 // WhatsApp bot conversation logic.
 // Handles onboarding state, temperature logging, and AI-powered responses.
 
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { sendWhatsAppText, sendWhatsAppImage } from "./whatsapp.server";
+import { botDb } from "./bot-context.server";
 import {
   parseTemperature,
   predictCycle,
@@ -17,7 +16,7 @@ import {
 
 // Fetch lengths of completed past cycles (most-recent first, capped at 12).
 async function getCycleHistory(userId: string): Promise<number[]> {
-  const { data } = await supabaseAdmin
+  const { data } = await botDb()
     .from("cycles")
     .select("started_on, ended_on")
     .eq("user_id", userId)
@@ -279,19 +278,8 @@ function normalizePhone(p: string): string {
   return p.replace(/[^\d]/g, "");
 }
 
-export async function findUserByPhone(phone: string) {
-  const n = normalizePhone(phone);
-  const { data, error } = await supabaseAdmin
-    .from("profiles")
-    .select("*")
-    .eq("whatsapp_number", n)
-    .maybeSingle();
-  if (error) console.error("findUserByPhone error", error);
-  return data;
-}
-
 async function logInbound(userId: string | null, from: string, waId: string, body: string, raw: unknown) {
-  await supabaseAdmin.from("bot_messages").insert({
+  await botDb().from("bot_messages").insert({
     user_id: userId,
     wa_message_id: waId,
     direction: "in",
@@ -302,7 +290,7 @@ async function logInbound(userId: string | null, from: string, waId: string, bod
 }
 
 async function logOutbound(userId: string | null, body: string) {
-  await supabaseAdmin.from("bot_messages").insert({
+  await botDb().from("bot_messages").insert({
     user_id: userId,
     direction: "out",
     body,
@@ -324,7 +312,7 @@ async function reply(profile: any, to: string, body: string, opts?: { hint?: boo
   const translated = await translate(withHint, userLang(profile, to));
   const cap = captureOf(profile);
   if (cap) cap.push({ text: translated });
-  else await sendWhatsAppText(to, translated);
+  else throw new Error("Assistant replies require an in-app capture target.");
   await logOutbound(profile?.id ?? null, translated);
 }
 
@@ -335,7 +323,7 @@ async function replyImage(profile: any, to: string, imageUrl: string, caption?: 
   const cap = finalCaption ? await translate(finalCaption, userLang(profile, to)) : undefined;
   const sink = captureOf(profile);
   if (sink) sink.push({ text: cap, imageUrl });
-  else await sendWhatsAppImage(to, imageUrl, cap);
+  else throw new Error("Assistant images require an in-app capture target.");
   if (cap) await logOutbound(profile?.id ?? null, `[chart] ${cap}`);
 }
 
@@ -630,7 +618,7 @@ async function shortenChartUrl(longUrl: string): Promise<string> {
 
 
 async function getOrCreateActiveCycle(userId: string, cycleStartIso: string) {
-  const { data: existing } = await supabaseAdmin
+  const { data: existing } = await botDb()
     .from("cycles")
     .select("*")
     .eq("user_id", userId)
@@ -639,7 +627,7 @@ async function getOrCreateActiveCycle(userId: string, cycleStartIso: string) {
     .limit(1)
     .maybeSingle();
   if (existing) return existing;
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await botDb()
     .from("cycles")
     .insert({ user_id: userId, started_on: cycleStartIso, status: "active" })
     .select("*")
@@ -653,7 +641,7 @@ async function getLogsForCycleChart(userId: string, _cycleId: string, _cycleStar
   // disappear from the chart when a new one is added (re-anchoring the cycle
   // start or filtering by cycle_id would otherwise silently drop earlier
   // entries the user is expecting to still see).
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await botDb()
     .from("temperature_logs")
     .select("logged_for, temp_celsius, cycle_id")
     .eq("user_id", userId)
@@ -688,71 +676,9 @@ export async function handleIncomingMessage(args: {
   const lower = trimmed.toLowerCase();
   const detectedLanguage = normalized.language;
 
-  let profile = profileOverride ?? (await findUserByPhone(from));
-  if (capture && profile) profile = { ...profile, __capture: capture };
-  if (!profile) {
-    const n = normalizePhone(from);
-    const { data: userData, error: userErr } = await supabaseAdmin.auth.admin.createUser({
-      email: `wa_${n}@bot.local`,
-      email_confirm: true,
-      user_metadata: { display_name: `WhatsApp ${n.slice(-4)}`, whatsapp_number: n },
-    });
-    if (userErr || !userData?.user) {
-      console.error("auto-create auth user failed", userErr);
-      await sendWhatsAppText(from, await translate("Sorry, something went wrong setting up your account. Please try again.", detectedLanguage ?? detectLanguage(from)));
-      return;
-    }
-    const { data: updated, error: updErr } = await supabaseAdmin
-      .from("profiles")
-      .update({ whatsapp_number: n })
-      .eq("id", userData.user.id)
-      .select("*")
-      .single();
-    if (updErr || !updated) {
-      console.error("auto-create profile update failed", updErr);
-      await sendWhatsAppText(from, await translate("Sorry, something went wrong setting up your account. Please try again.", detectedLanguage ?? detectLanguage(from)));
-      return;
-    }
-    profile = updated;
-    const initialState = { awaiting_name: true, awaiting_period_start: true };
-    await supabaseAdmin.from("profiles").update({ bot_state: initialState }).eq("id", profile.id);
-    profile.bot_state = initialState;
-    const welcome = `👋 Welcome! I've set up a new account for you.
-
-🙋 *First, what's your name?* Just reply with your name so I know what to call you.
-
-ℹ️ This bot helps you track fertility patterns.
-
-⏰ I'll send a reminder at *6:00 a.m. your local time* so you can log your BBT before getting out of bed.
-
-🛡️ For contraception: use protection on 🔴 red days. No protection is needed on 🟢 green days.
-
-🌐 *Language:* I'll reply in your local language by default. Type *lang english*, *lang french*, or *lang local* anytime to switch.
-
-🌡️ *How to use a BBT (basal body thermometer) properly:*
-• Use a dedicated BBT thermometer (0.01°C precision), not a regular fever one.
-• Take your temperature *first thing in the morning*, before getting out of bed, talking, drinking, or even sitting up.
-• Measure at roughly the *same time every day* (within ~30 min).
-• Aim for at least *4–5 hours of uninterrupted sleep* before measuring.
-• Measure the same way every day — orally (under the tongue), vaginally, or rectally — don't mix methods.
-
-📅 *First, let's anchor your cycle:* what date did your *last period start* (day 1 of bleeding)?
-Reply with a date — e.g. *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days ago*.
-
-Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type *help* anytime.`;
-    const welcomeLang = detectedLanguage ?? detectLanguage(from);
-    if (detectedLanguage) {
-      const st = { ...initialState, detected_language: detectedLanguage };
-      await supabaseAdmin.from("profiles").update({ bot_state: st }).eq("id", profile.id);
-      profile.bot_state = st;
-    }
-    const outbound = await translate(welcome, welcomeLang);
-    if (capture) capture.push({ text: outbound });
-    else await sendWhatsAppText(from, outbound);
-    await logOutbound(profile.id, outbound);
-    await logInbound(profile.id, from, waMessageId, original, raw);
-    return;
-  }
+  let profile = profileOverride;
+  if (!profile) throw new Error("A signed-in profile is required to use the assistant.");
+  if (capture) profile = { ...profile, __capture: capture };
   await logInbound(profile.id, from, waMessageId, original, raw);
 
   // Remember the language the user writes in (unless they set an explicit
@@ -761,7 +687,7 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
     const st = readBotState(profile);
     if (!st.language && st.detected_language !== detectedLanguage) {
       const next = { ...st, detected_language: detectedLanguage };
-      await supabaseAdmin.from("profiles").update({ bot_state: next }).eq("id", profile.id);
+      await botDb().from("profiles").update({ bot_state: next }).eq("id", profile.id);
       profile = { ...profile, bot_state: next };
     }
   }
@@ -848,12 +774,12 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
 
   if (lower === "history" || lower === "/history" || lower === "cycles") {
     const [{ data: cyclesAsc }, { data: allLogs }] = await Promise.all([
-      supabaseAdmin
+      botDb()
         .from("cycles")
         .select("id, started_on, ended_on, status, ovulation_day")
         .eq("user_id", profile.id)
         .order("started_on", { ascending: true }),
-      supabaseAdmin
+      botDb()
         .from("temperature_logs")
         .select("logged_for, temp_celsius, cycle_id")
         .eq("user_id", profile.id)
@@ -1001,7 +927,7 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
   if (langPick) {
     const prev = readBotState(profile);
     const nextState = { ...prev, language: langPick };
-    await supabaseAdmin.from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
+    await botDb().from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
     profile = { ...profile, bot_state: nextState };
     await reply(profile, from, `🌐 Language set to ${langPick}. I'll reply in ${langPick} from now on. Type *lang local* to switch back to your local language.`);
     return;
@@ -1026,7 +952,7 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
         pending_fever_temp: undefined,
         pending_fever_date: undefined,
       };
-      await supabaseAdmin.from("profiles").update({ bot_state: dropped }).eq("id", profile.id);
+      await botDb().from("profiles").update({ bot_state: dropped }).eq("id", profile.id);
       profile = { ...profile, bot_state: dropped };
       Object.assign(botState, dropped);
     }
@@ -1042,7 +968,7 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
       pending_fever_temp: undefined,
       pending_fever_date: undefined,
     };
-    await supabaseAdmin.from("profiles").update({ bot_state: cleared }).eq("id", profile.id);
+    await botDb().from("profiles").update({ bot_state: cleared }).eq("id", profile.id);
     profile = { ...profile, bot_state: cleared };
 
     if (pendingTemp === null) {
@@ -1077,7 +1003,7 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
       }
       // Any other message: drop the pending question and reply normally.
       const dropped = { ...botState, awaiting_morning_check: false };
-      await supabaseAdmin.from("profiles").update({ bot_state: dropped }).eq("id", profile.id);
+      await botDb().from("profiles").update({ bot_state: dropped }).eq("id", profile.id);
       profile = { ...profile, bot_state: dropped };
       Object.assign(botState, dropped);
     }
@@ -1091,7 +1017,7 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
       awaiting_morning_check: false,
       ignore_temp_on: yes ? checkDate : undefined,
     };
-    await supabaseAdmin.from("profiles").update({ bot_state: next }).eq("id", profile.id);
+    await botDb().from("profiles").update({ bot_state: next }).eq("id", profile.id);
     profile = { ...profile, bot_state: next };
     await reply(
       profile,
@@ -1117,9 +1043,9 @@ Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type
     const name = trimmed.replace(/\s+/g, " ").trim();
     // Accept anything that looks like a name (letters, spaces, hyphens, apostrophes).
     if (/^[\p{L}][\p{L}\s'’.-]{0,60}$/u.test(name)) {
-      await supabaseAdmin.from("profiles").update({ display_name: name }).eq("id", profile.id);
+      await botDb().from("profiles").update({ display_name: name }).eq("id", profile.id);
       const nextState = { ...botState, awaiting_name: false };
-      await supabaseAdmin.from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
+      await botDb().from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
       profile = { ...profile, bot_state: nextState };
       await reply(
         profile,
@@ -1139,7 +1065,7 @@ Reply with a date — e.g. *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 da
   if (botState.awaiting_period_start) {
     const pendingParsed = parseTempAndDay(trimmed);
     if (pendingParsed) {
-      const { data: activeCycle } = await supabaseAdmin
+      const { data: activeCycle } = await botDb()
         .from("cycles")
         .select("id")
         .eq("user_id", profile.id)
@@ -1159,7 +1085,7 @@ Reply with a date — e.g. *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 da
           pending_day: undefined,
           pending_logged_for: undefined,
         };
-        await supabaseAdmin.from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
+        await botDb().from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
         await handleTempLog({ ...profile, bot_state: nextState }, from, pendingParsed.temp, pendingParsed.day, pendingParsed.date);
         return;
       }
@@ -1171,7 +1097,7 @@ Reply with a date — e.g. *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 da
         pending_day: pendingParsed.day,
         pending_logged_for: pendingParsed.date ?? isoDate(new Date()),
       };
-      await supabaseAdmin.from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
+      await botDb().from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
       await reply(
         profile,
         from,
@@ -1192,7 +1118,7 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
       );
       return;
     }
-    const { data: activeCycle } = await supabaseAdmin
+    const { data: activeCycle } = await botDb()
       .from("cycles")
       .select("id")
       .eq("user_id", profile.id)
@@ -1200,9 +1126,9 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
       .order("started_on", { ascending: false })
       .maybeSingle();
     if (activeCycle) {
-      await supabaseAdmin.from("cycles").update({ started_on: parsedDate, ended_on: null, status: "active" }).eq("id", activeCycle.id);
+      await botDb().from("cycles").update({ started_on: parsedDate, ended_on: null, status: "active" }).eq("id", activeCycle.id);
     } else {
-      await supabaseAdmin.from("cycles").insert({ user_id: profile.id, started_on: parsedDate, status: "active" });
+      await botDb().from("cycles").insert({ user_id: profile.id, started_on: parsedDate, status: "active" });
     }
     const pendingTemp = typeof botState.pending_temp === "number" ? botState.pending_temp : null;
     const pendingDay = typeof botState.pending_day === "number" ? botState.pending_day : null;
@@ -1214,7 +1140,7 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
       pending_day: undefined,
       pending_logged_for: undefined,
     };
-    await supabaseAdmin.from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
+    await botDb().from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
     profile = { ...profile, bot_state: nextState };
     if (pendingTemp !== null) {
       await reply(profile, from, `✅ Got it — your cycle started *${parsedDate}*. I'll now save the temperature you sent using this corrected cycle day.`);
@@ -1247,17 +1173,17 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
       pending_logged_for: undefined,
       last_bleeding_check_on: pendingDate,
     };
-    await supabaseAdmin.from("profiles").update({ bot_state: clearedState }).eq("id", profile.id);
+    await botDb().from("profiles").update({ bot_state: clearedState }).eq("id", profile.id);
     profile = { ...profile, bot_state: clearedState };
 
     if (yes) {
       // Close active cycle, open a new one starting on the pending log date.
-      await supabaseAdmin
+      await botDb()
         .from("cycles")
         .update({ status: "completed", ended_on: pendingDate })
         .eq("user_id", profile.id)
         .eq("status", "active");
-      await supabaseAdmin
+      await botDb()
         .from("cycles")
         .insert({ user_id: profile.id, started_on: pendingDate, status: "active" });
       await reply(profile, from, `🩸 Got it — new cycle starts today (${pendingDate}). That's *day 1*. I'll recalibrate your fertile window from here.`);
@@ -1279,12 +1205,12 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
   if (lower === "reset cycle" || lower === "new cycle" || lower === "period started") {
     const today = isoDate(new Date());
     // Close existing
-    await supabaseAdmin
+    await botDb()
       .from("cycles")
       .update({ status: "completed", ended_on: today })
       .eq("user_id", profile.id)
       .eq("status", "active");
-    const { data: cycle } = await supabaseAdmin
+    const { data: cycle } = await botDb()
       .from("cycles")
       .insert({ user_id: profile.id, started_on: today, status: "active" })
       .select("*")
@@ -1352,7 +1278,7 @@ Reply with a date like *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days a
 // --- Direct updates the bot can apply from natural language -----------------
 
 async function applyPeriodStart(profile: any, from: string, newStart: string) {
-  const { data: activeCycle } = await supabaseAdmin
+  const { data: activeCycle } = await botDb()
     .from("cycles")
     .select("id, started_on")
     .eq("user_id", profile.id)
@@ -1360,17 +1286,17 @@ async function applyPeriodStart(profile: any, from: string, newStart: string) {
     .order("started_on", { ascending: false })
     .maybeSingle();
   if (activeCycle) {
-    await supabaseAdmin
+    await botDb()
       .from("cycles")
       .update({ started_on: newStart, ended_on: null, status: "active" })
       .eq("id", activeCycle.id);
   } else {
-    await supabaseAdmin.from("cycles").insert({ user_id: profile.id, started_on: newStart, status: "active" });
+    await botDb().from("cycles").insert({ user_id: profile.id, started_on: newStart, status: "active" });
   }
   const state = readBotState(profile);
   if (state.awaiting_period_start) {
     const next = { ...state, awaiting_period_start: false };
-    await supabaseAdmin.from("profiles").update({ bot_state: next }).eq("id", profile.id);
+    await botDb().from("profiles").update({ bot_state: next }).eq("id", profile.id);
     profile = { ...profile, bot_state: next };
   }
   await reply(
@@ -1405,7 +1331,7 @@ async function applyLengths(profile: any, from: string, avgCycleLength?: number,
     await reply(profile, from, "🤔 Cycle length should be 20–45 days and period length 2–10 days. Try again with a number in that range.");
     return;
   }
-  await supabaseAdmin.from("profiles").update(update).eq("id", profile.id);
+  await botDb().from("profiles").update(update).eq("id", profile.id);
   profile = { ...profile, ...update };
   const parts: string[] = [];
   if (update.avg_cycle_length) parts.push(`average cycle *${update.avg_cycle_length} days*`);
@@ -1589,13 +1515,13 @@ export async function prepareWebTempFlags(
     // The user already told us she isn't sick, so don't ask again.
     web_skip_fever_check_on: flags.sick ? undefined : loggedFor,
   };
-  await supabaseAdmin.from("profiles").update({ bot_state: state }).eq("id", profile.id);
+  await botDb().from("profiles").update({ bot_state: state }).eq("id", profile.id);
   return state;
 }
 
 async function saveExcludedLog(profile: any, temp: number, loggedFor: string, reason: string) {
 
-  const { data: cycle } = await supabaseAdmin
+  const { data: cycle } = await botDb()
     .from("cycles")
     .select("id")
     .eq("user_id", profile.id)
@@ -1603,7 +1529,7 @@ async function saveExcludedLog(profile: any, temp: number, loggedFor: string, re
     .order("started_on", { ascending: false })
     .limit(1)
     .maybeSingle();
-  await supabaseAdmin.from("temperature_logs").upsert(
+  await botDb().from("temperature_logs").upsert(
     {
       user_id: profile.id,
       cycle_id: cycle?.id ?? null,
@@ -1645,14 +1571,14 @@ async function handleTempLog(
       const desiredStart = isoDate(addDays(new Date(loggedFor), -(day - 1)));
       if (desiredStart !== cycle.started_on) {
         cycleStartIso = desiredStart;
-        await supabaseAdmin.from("cycles").update({ started_on: cycleStartIso }).eq("id", cycle.id);
+        await botDb().from("cycles").update({ started_on: cycleStartIso }).eq("id", cycle.id);
       }
     } else {
       // Only `dN`. If this cycle already has logs, the anchor is trusted:
       // place the log on that cycle day's own date so back-filling d6/d7/d8 in
       // one sitting creates separate rows instead of overwriting today's row.
       // If there are no logs yet, treat it as "today is day N" and re-anchor.
-      const { count } = await supabaseAdmin
+      const { count } = await botDb()
         .from("temperature_logs")
         .select("id", { count: "exact", head: true })
         .eq("user_id", profile.id)
@@ -1661,7 +1587,7 @@ async function handleTempLog(
         loggedFor = isoDate(addDays(new Date(cycle.started_on), day - 1));
       } else {
         cycleStartIso = isoDate(addDays(new Date(today), -(day - 1)));
-        await supabaseAdmin.from("cycles").update({ started_on: cycleStartIso }).eq("id", cycle.id);
+        await botDb().from("cycles").update({ started_on: cycleStartIso }).eq("id", cycle.id);
       }
     }
   }
@@ -1684,7 +1610,7 @@ async function handleTempLog(
       pending_temp: temp,
       pending_logged_for: loggedFor,
     };
-    await supabaseAdmin.from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
+    await botDb().from("profiles").update({ bot_state: nextState }).eq("id", profile.id);
     await reply(
       { ...profile, bot_state: nextState },
       from,
@@ -1705,7 +1631,7 @@ async function handleTempLog(
       ignore_reason: undefined,
       web_skip_fever_check_on: undefined,
     };
-    await supabaseAdmin.from("profiles").update({ bot_state: clearedState }).eq("id", profile.id);
+    await botDb().from("profiles").update({ bot_state: clearedState }).eq("id", profile.id);
     await reply(
       { ...profile, bot_state: clearedState },
       from,
@@ -1726,7 +1652,7 @@ async function handleTempLog(
       pending_fever_temp: temp,
       pending_fever_date: loggedFor,
     };
-    await supabaseAdmin.from("profiles").update({ bot_state: feverState }).eq("id", profile.id);
+    await botDb().from("profiles").update({ bot_state: feverState }).eq("id", profile.id);
     await reply(
       { ...profile, bot_state: feverState },
       from,
@@ -1740,7 +1666,7 @@ async function handleTempLog(
 
 
   // Upsert log for that date
-  const { error: upErr } = await supabaseAdmin
+  const { error: upErr } = await botDb()
     .from("temperature_logs")
     .upsert(
       {
@@ -1785,7 +1711,7 @@ async function handleTempLog(
   });
 
   // Update cycle prediction
-  await supabaseAdmin
+  await botDb()
     .from("cycles")
     .update({
       ovulation_day: stats.estimatedOvulationDay,
@@ -1849,82 +1775,6 @@ async function handleTempLog(
   });
   await replyImage(profile, from, await shortenChartUrl(chartUrl), caption);
 }
-
-export async function sendDailyLogReminders(now = new Date()) {
-  const { data: profiles, error } = await supabaseAdmin
-    .from("profiles")
-    .select("*")
-    .not("whatsapp_number", "is", null);
-  if (error) throw error;
-
-  for (const profile of profiles ?? []) {
-    if (!profile.whatsapp_number) continue;
-    const state = readBotState(profile);
-    const timeZone = typeof state.timezone === "string" ? state.timezone : phoneTimezone(profile.whatsapp_number);
-    const local = localDateHour(now, timeZone);
-    if (local.hour !== 6 || state.last_6am_reminder_on === local.date) continue;
-
-    // Same alerts in the app / on the phone, not only on WhatsApp.
-    try {
-      const { syncNotificationsFor } = await import("@/lib/notifications.server");
-      await syncNotificationsFor(supabaseAdmin, profile.id, local.date);
-    } catch (e) {
-      console.error("notification sync failed", e);
-    }
-
-    // If user is past their average cycle length, ask the bleeding question
-    // instead of the usual log reminder.
-    let message = [
-      "⏰ Good morning — time to log your BBT, before getting out of bed.",
-      "",
-      "☝️ Quick check first — did *any* of these happen last night?",
-      "• Slept less than 3 consecutive hours",
-      "• Woke up much later than usual",
-      "• Drank alcohol",
-      "",
-      "Reply *1* = YES (any of them) · *2* = NO (none).",
-      "",
-      "Then send your temperature like *36.52*.",
-    ].join("\n");
-    const { data: cycle } = await supabaseAdmin
-      .from("cycles")
-      .select("started_on")
-      .eq("user_id", profile.id)
-      .eq("status", "active")
-      .order("started_on", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (cycle) {
-      const computedDay = daysBetween(new Date(cycle.started_on), new Date(`${local.date}T00:00:00`)) + 1;
-      const threshold = profile.avg_cycle_length || 28;
-      if (computedDay > threshold && state.last_bleeding_check_on !== local.date) {
-        message = `⏰ Good morning — you're on day ${computedDay}, past your usual ${threshold}-day cycle. *Are you bleeding today?* Reply *YES* (new cycle starts as day 1) or *NO* (I'll keep counting). Then send your BBT.`;
-        await supabaseAdmin
-          .from("profiles")
-          .update({ bot_state: { ...state, timezone: timeZone, awaiting_bleeding_check: true, pending_logged_for: local.date, last_6am_reminder_on: local.date } })
-          .eq("id", profile.id);
-        await reply(profile, `+${profile.whatsapp_number}`, message);
-        continue;
-      }
-    }
-
-    await reply(profile, `+${profile.whatsapp_number}`, message);
-    await supabaseAdmin
-      .from("profiles")
-      .update({
-        bot_state: {
-          ...state,
-          timezone: timeZone,
-          last_6am_reminder_on: local.date,
-          awaiting_morning_check: true,
-          morning_check_on: local.date,
-          ignore_temp_on: undefined,
-        },
-      })
-      .eq("id", profile.id);
-  }
-}
-
 
 async function generateAiCommentary(input: {
   temp: number;
