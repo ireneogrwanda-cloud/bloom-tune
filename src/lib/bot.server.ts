@@ -680,9 +680,6 @@ export async function handleIncomingMessage(args: {
   if (!profile) throw new Error("A signed-in profile is required to use the assistant.");
   if (capture) profile = { ...profile, __capture: capture };
   await logInbound(profile.id, from, waMessageId, original, raw);
-    return;
-  }
-  await logInbound(profile.id, from, waMessageId, original, raw);
 
   // Remember the language the user writes in (unless they set an explicit
   // `lang` override), so every future reply matches it.
