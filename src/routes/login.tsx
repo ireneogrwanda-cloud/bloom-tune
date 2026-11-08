@@ -1,8 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { signInWithWhatsApp } from "@/lib/otp.functions";
+import { normalizeWhatsAppPhone } from "@/lib/otp.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,9 +11,9 @@ export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
       { title: "Sign in with WhatsApp — My Cycle AI" },
-      { name: "description", content: "Sign in to My Cycle AI with just your WhatsApp number." },
+      { name: "description", content: "Sign in securely with a WhatsApp verification code." },
       { property: "og:title", content: "Sign in with WhatsApp — My Cycle AI" },
-      { property: "og:description", content: "No password or code needed — your WhatsApp number is your key." },
+      { property: "og:description", content: "Verify your number once and stay signed in on this device." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -24,7 +23,7 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   return (
-    <AuthShell title="Sign in with WhatsApp" subtitle="Just your WhatsApp number — no password, no code">
+    <AuthShell title="Sign in with WhatsApp" subtitle="Verify your number once, then stay signed in on this device">
       <WhatsAppOtpForm />
     </AuthShell>
   );
@@ -32,31 +31,89 @@ function LoginPage() {
 
 export function WhatsAppOtpForm() {
   const nav = useNavigate();
-  const signIn = useServerFn(signInWithWhatsApp);
   const [phone, setPhone] = useState("");
+  const [code, setCode] = useState("");
+  const [codeSent, setCodeSent] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  async function onSignIn(e: React.FormEvent) {
-    e.preventDefault();
-    if (!/^\+?\d[\d\s\-()]{6,19}$/.test(phone)) {
-      return toast.error("Enter a valid WhatsApp number including country code");
+  async function requestCode(e?: React.FormEvent) {
+    e?.preventDefault();
+    let normalized: string;
+    try {
+      normalized = normalizeWhatsAppPhone(phone);
+    } catch {
+      toast.error("Enter a valid WhatsApp number including country code");
+      return;
     }
     setLoading(true);
     try {
-      const { tokenHash, isNew } = await signIn({ data: { phone } });
-      const { error } = await supabase.auth.verifyOtp({ type: "magiclink", token_hash: tokenHash });
-      if (error) throw new Error(error.message);
-      toast.success(isNew ? "Welcome to My Cycle AI!" : "Welcome back");
-      nav({ to: isNew ? "/onboarding" : "/" });
+      const { error } = await supabase.auth.signInWithOtp({
+        phone: normalized,
+        options: { channel: "whatsapp" },
+      });
+      if (error) throw error;
+      setPhone(normalized);
+      setCodeSent(true);
+      toast.success("Verification code sent to your WhatsApp");
     } catch (e: any) {
-      toast.error(e?.message ?? "Could not sign you in");
+      toast.error(e?.message ?? "Could not send the WhatsApp code");
     } finally {
       setLoading(false);
     }
   }
 
+  async function verifyCode(e: React.FormEvent) {
+    e.preventDefault();
+    if (!/^\d{6}$/.test(code)) return toast.error("Enter the 6-digit code from WhatsApp");
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.verifyOtp({ phone, token: code, type: "sms" });
+      if (error) throw error;
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("disclaimer_accepted_at")
+        .maybeSingle();
+      if (profileError) throw profileError;
+      const needsOnboarding = !profile?.disclaimer_accepted_at;
+      toast.success(needsOnboarding ? "Welcome to My Cycle AI!" : "Welcome back");
+      await nav({ to: needsOnboarding ? "/onboarding" : "/" });
+    } catch (e: any) {
+      toast.error(e?.message ?? "That code could not be verified");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (codeSent) {
+    return (
+      <form onSubmit={verifyCode} className="space-y-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="code">WhatsApp verification code</Label>
+          <Input
+            id="code"
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            placeholder="123456"
+            maxLength={6}
+            required
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+          />
+          <p className="text-xs text-muted-foreground">Sent to {phone}. The code expires shortly.</p>
+        </div>
+        <Button type="submit" disabled={loading} className="w-full">
+          {loading ? "Verifying…" : "Verify and sign in"}
+        </Button>
+        <Button type="button" variant="ghost" disabled={loading} className="w-full" onClick={() => void requestCode()}>
+          Send a new code
+        </Button>
+      </form>
+    );
+  }
+
   return (
-    <form onSubmit={onSignIn} className="space-y-4">
+    <form onSubmit={requestCode} className="space-y-4">
       <div className="space-y-1.5">
         <Label htmlFor="phone">WhatsApp number</Label>
         <Input
@@ -69,12 +126,11 @@ export function WhatsAppOtpForm() {
           onChange={(e) => setPhone(e.target.value)}
         />
         <p className="text-xs text-muted-foreground">
-          Include your country code. If this number is already synced with the bot, you'll go straight to your account —
-          no code needed.
+          Include your country code. A verified number protects your private cycle history.
         </p>
       </div>
       <Button type="submit" disabled={loading} className="w-full">
-        {loading ? "Signing you in…" : "Continue"}
+        {loading ? "Sending code…" : "Send WhatsApp code"}
       </Button>
     </form>
   );
