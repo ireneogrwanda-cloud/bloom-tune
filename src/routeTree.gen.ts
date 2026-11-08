@@ -20,8 +20,6 @@ import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedHowItWorksRouteImport } from './routes/_authenticated/how-it-works'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
-import { Route as ApiPublicHooksLogRemindersRouteImport } from './routes/api/public/hooks/log-reminders'
-import { Route as ApiPublicWhatsappWebhookRouteImport } from './routes/api/public/whatsapp/webhook'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -77,18 +75,6 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const ApiPublicHooksLogRemindersRoute =
-  ApiPublicHooksLogRemindersRouteImport.update({
-    id: '/api/public/hooks/log-reminders',
-    path: '/api/public/hooks/log-reminders',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiPublicWhatsappWebhookRoute =
-  ApiPublicWhatsappWebhookRouteImport.update({
-    id: '/api/public/whatsapp/webhook',
-    path: '/api/public/whatsapp/webhook',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -101,8 +87,6 @@ export interface FileRoutesByFullPath {
   '/how-it-works': typeof AuthenticatedHowItWorksRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
-  '/api/public/hooks/log-reminders': typeof ApiPublicHooksLogRemindersRoute
-  '/api/public/whatsapp/webhook': typeof ApiPublicWhatsappWebhookRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -115,8 +99,6 @@ export interface FileRoutesByTo {
   '/how-it-works': typeof AuthenticatedHowItWorksRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/settings': typeof AuthenticatedSettingsRoute
-  '/api/public/hooks/log-reminders': typeof ApiPublicHooksLogRemindersRoute
-  '/api/public/whatsapp/webhook': typeof ApiPublicWhatsappWebhookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -131,8 +113,6 @@ export interface FileRoutesById {
   '/_authenticated/how-it-works': typeof AuthenticatedHowItWorksRoute
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
-  '/api/public/hooks/log-reminders': typeof ApiPublicHooksLogRemindersRoute
-  '/api/public/whatsapp/webhook': typeof ApiPublicWhatsappWebhookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -147,8 +127,6 @@ export interface FileRouteTypes {
     | '/how-it-works'
     | '/onboarding'
     | '/settings'
-    | '/api/public/hooks/log-reminders'
-    | '/api/public/whatsapp/webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -161,8 +139,6 @@ export interface FileRouteTypes {
     | '/how-it-works'
     | '/onboarding'
     | '/settings'
-    | '/api/public/hooks/log-reminders'
-    | '/api/public/whatsapp/webhook'
   id:
     | '__root__'
     | '/'
@@ -176,8 +152,6 @@ export interface FileRouteTypes {
     | '/_authenticated/how-it-works'
     | '/_authenticated/onboarding'
     | '/_authenticated/settings'
-    | '/api/public/hooks/log-reminders'
-    | '/api/public/whatsapp/webhook'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -185,8 +159,6 @@ export interface RootRouteChildren {
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   LoginRoute: typeof LoginRoute
   SignupRoute: typeof SignupRoute
-  ApiPublicHooksLogRemindersRoute: typeof ApiPublicHooksLogRemindersRoute
-  ApiPublicWhatsappWebhookRoute: typeof ApiPublicWhatsappWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -268,20 +240,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/api/public/hooks/log-reminders': {
-      id: '/api/public/hooks/log-reminders'
-      path: '/api/public/hooks/log-reminders'
-      fullPath: '/api/public/hooks/log-reminders'
-      preLoaderRoute: typeof ApiPublicHooksLogRemindersRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/whatsapp/webhook': {
-      id: '/api/public/whatsapp/webhook'
-      path: '/api/public/whatsapp/webhook'
-      fullPath: '/api/public/whatsapp/webhook'
-      preLoaderRoute: typeof ApiPublicWhatsappWebhookRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -314,8 +272,6 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   LoginRoute: LoginRoute,
   SignupRoute: SignupRoute,
-  ApiPublicHooksLogRemindersRoute: ApiPublicHooksLogRemindersRoute,
-  ApiPublicWhatsappWebhookRoute: ApiPublicWhatsappWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
