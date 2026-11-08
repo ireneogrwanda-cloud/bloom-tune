@@ -1,3 +1,11 @@
+# Vercel public-key refactor
+- [ ] Remove every runtime import and call that uses the privileged database key.
+- [ ] Replace phone-only sign-in with verified WhatsApp OTP and persistent device sessions.
+- [ ] Run assistant reads and writes through the signed-in user's RLS client.
+- [ ] Disable public WhatsApp/cron automation that cannot be user-authorized safely.
+- [ ] Add Vercel build output and public environment configuration.
+- [ ] Run focused tests/typecheck, inspect build health, and sync clean source to GitHub.
+
 # Offline PWA
 - [x] Add bleeding-started toggle on calendar dates with backdated cycle boundaries and retained readings.
 - [x] Extend predicted fertility colours and bleeding markers across future months; refresh from readings.
