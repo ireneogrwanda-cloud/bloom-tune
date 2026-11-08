@@ -5,3 +5,6 @@
 - Keep shared offline session, connection and synchronization state in the authenticated layout so dashboard, history and assistant use the same owner.
 - Record bleeding dates through an authenticated transactional database function that splits the owning cycle and reassigns readings without deletion.
 - Future calendar cycles are view-only projections from the shared prediction model, never actual cycle rows or confirmed statuses.
+- Use request-scoped RLS clients for every application data operation; Vercel uses Nitro's Vercel preset and public project keys only, never privileged runtime keys.
+- Verify phone ownership through managed WhatsApp OTP and persistent sessions; legacy data moves only through the authenticated matching-phone claim function.
+- Keep automated WhatsApp ingestion and cross-user reminders off public-key deployments until a separate trusted, least-privileged integration worker exists.
