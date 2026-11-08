@@ -3,13 +3,13 @@ import { botDb, withBotDatabase } from "./bot-context.server";
 
 describe("request-scoped assistant database access", () => {
   it("keeps concurrent users isolated", async () => {
-    const first = { userId: "user-one" };
-    const second = { userId: "user-two" };
+    const first = { userId: "user-one" } as any;
+    const second = { userId: "user-two" } as any;
     const readFirst = withBotDatabase(first, async () => {
       await new Promise((resolve) => setTimeout(resolve, 5));
-      return botDb<typeof first>().userId;
+      return (botDb() as any).userId;
     });
-    const readSecond = withBotDatabase(second, async () => botDb<typeof second>().userId);
+    const readSecond = withBotDatabase(second, async () => (botDb() as any).userId);
     await expect(Promise.all([readFirst, readSecond])).resolves.toEqual(["user-one", "user-two"]);
   });
 
