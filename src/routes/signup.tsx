@@ -17,7 +17,7 @@ export const Route = createFileRoute("/signup")({
 
 function SignupPage() {
   return (
-    <AuthShell title="Create your account" subtitle="Just your WhatsApp number — no password, no code">
+    <AuthShell title="Create your account" subtitle="Verify your WhatsApp number once, then stay signed in">
       <WhatsAppOtpForm />
       <p className="mt-4 text-center text-sm text-muted-foreground">
         Already have an account?{" "}

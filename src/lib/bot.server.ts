@@ -278,17 +278,6 @@ function normalizePhone(p: string): string {
   return p.replace(/[^\d]/g, "");
 }
 
-export async function findUserByPhone(phone: string) {
-  const n = normalizePhone(phone);
-  const { data, error } = await botDb()
-    .from("profiles")
-    .select("*")
-    .eq("whatsapp_number", n)
-    .maybeSingle();
-  if (error) console.error("findUserByPhone error", error);
-  return data;
-}
-
 async function logInbound(userId: string | null, from: string, waId: string, body: string, raw: unknown) {
   await botDb().from("bot_messages").insert({
     user_id: userId,
@@ -323,7 +312,7 @@ async function reply(profile: any, to: string, body: string, opts?: { hint?: boo
   const translated = await translate(withHint, userLang(profile, to));
   const cap = captureOf(profile);
   if (cap) cap.push({ text: translated });
-  else await sendWhatsAppText(to, translated);
+  else throw new Error("Assistant replies require an in-app capture target.");
   await logOutbound(profile?.id ?? null, translated);
 }
 
@@ -334,7 +323,7 @@ async function replyImage(profile: any, to: string, imageUrl: string, caption?: 
   const cap = finalCaption ? await translate(finalCaption, userLang(profile, to)) : undefined;
   const sink = captureOf(profile);
   if (sink) sink.push({ text: cap, imageUrl });
-  else await sendWhatsAppImage(to, imageUrl, cap);
+  else throw new Error("Assistant images require an in-app capture target.");
   if (cap) await logOutbound(profile?.id ?? null, `[chart] ${cap}`);
 }
 
@@ -687,69 +676,10 @@ export async function handleIncomingMessage(args: {
   const lower = trimmed.toLowerCase();
   const detectedLanguage = normalized.language;
 
-  let profile = profileOverride ?? (await findUserByPhone(from));
-  if (capture && profile) profile = { ...profile, __capture: capture };
-  if (!profile) {
-    const n = normalizePhone(from);
-    const { data: userData, error: userErr } = await botDb().auth.admin.createUser({
-      email: `wa_${n}@bot.local`,
-      email_confirm: true,
-      user_metadata: { display_name: `WhatsApp ${n.slice(-4)}`, whatsapp_number: n },
-    });
-    if (userErr || !userData?.user) {
-      console.error("auto-create auth user failed", userErr);
-      await sendWhatsAppText(from, await translate("Sorry, something went wrong setting up your account. Please try again.", detectedLanguage ?? detectLanguage(from)));
-      return;
-    }
-    const { data: updated, error: updErr } = await botDb()
-      .from("profiles")
-      .update({ whatsapp_number: n })
-      .eq("id", userData.user.id)
-      .select("*")
-      .single();
-    if (updErr || !updated) {
-      console.error("auto-create profile update failed", updErr);
-      await sendWhatsAppText(from, await translate("Sorry, something went wrong setting up your account. Please try again.", detectedLanguage ?? detectLanguage(from)));
-      return;
-    }
-    profile = updated;
-    const initialState = { awaiting_name: true, awaiting_period_start: true };
-    await botDb().from("profiles").update({ bot_state: initialState }).eq("id", profile.id);
-    profile.bot_state = initialState;
-    const welcome = `👋 Welcome! I've set up a new account for you.
-
-🙋 *First, what's your name?* Just reply with your name so I know what to call you.
-
-ℹ️ This bot helps you track fertility patterns.
-
-⏰ I'll send a reminder at *6:00 a.m. your local time* so you can log your BBT before getting out of bed.
-
-🛡️ For contraception: use protection on 🔴 red days. No protection is needed on 🟢 green days.
-
-🌐 *Language:* I'll reply in your local language by default. Type *lang english*, *lang french*, or *lang local* anytime to switch.
-
-🌡️ *How to use a BBT (basal body thermometer) properly:*
-• Use a dedicated BBT thermometer (0.01°C precision), not a regular fever one.
-• Take your temperature *first thing in the morning*, before getting out of bed, talking, drinking, or even sitting up.
-• Measure at roughly the *same time every day* (within ~30 min).
-• Aim for at least *4–5 hours of uninterrupted sleep* before measuring.
-• Measure the same way every day — orally (under the tongue), vaginally, or rectally — don't mix methods.
-
-📅 *First, let's anchor your cycle:* what date did your *last period start* (day 1 of bleeding)?
-Reply with a date — e.g. *2026-06-01*, *01/06*, *yesterday*, *today*, or *5 days ago*.
-
-Once that's set, just send your morning temperature (e.g. *36.7*) each day. Type *help* anytime.`;
-    const welcomeLang = detectedLanguage ?? detectLanguage(from);
-    if (detectedLanguage) {
-      const st = { ...initialState, detected_language: detectedLanguage };
-      await botDb().from("profiles").update({ bot_state: st }).eq("id", profile.id);
-      profile.bot_state = st;
-    }
-    const outbound = await translate(welcome, welcomeLang);
-    if (capture) capture.push({ text: outbound });
-    else await sendWhatsAppText(from, outbound);
-    await logOutbound(profile.id, outbound);
-    await logInbound(profile.id, from, waMessageId, original, raw);
+  let profile = profileOverride;
+  if (!profile) throw new Error("A signed-in profile is required to use the assistant.");
+  if (capture) profile = { ...profile, __capture: capture };
+  await logInbound(profile.id, from, waMessageId, original, raw);
     return;
   }
   await logInbound(profile.id, from, waMessageId, original, raw);
@@ -1848,82 +1778,6 @@ async function handleTempLog(
   });
   await replyImage(profile, from, await shortenChartUrl(chartUrl), caption);
 }
-
-export async function sendDailyLogReminders(now = new Date()) {
-  const { data: profiles, error } = await botDb()
-    .from("profiles")
-    .select("*")
-    .not("whatsapp_number", "is", null);
-  if (error) throw error;
-
-  for (const profile of profiles ?? []) {
-    if (!profile.whatsapp_number) continue;
-    const state = readBotState(profile);
-    const timeZone = typeof state.timezone === "string" ? state.timezone : phoneTimezone(profile.whatsapp_number);
-    const local = localDateHour(now, timeZone);
-    if (local.hour !== 6 || state.last_6am_reminder_on === local.date) continue;
-
-    // Same alerts in the app / on the phone, not only on WhatsApp.
-    try {
-      const { syncNotificationsFor } = await import("@/lib/notifications.server");
-      await syncNotificationsFor(botDb(), profile.id, local.date);
-    } catch (e) {
-      console.error("notification sync failed", e);
-    }
-
-    // If user is past their average cycle length, ask the bleeding question
-    // instead of the usual log reminder.
-    let message = [
-      "⏰ Good morning — time to log your BBT, before getting out of bed.",
-      "",
-      "☝️ Quick check first — did *any* of these happen last night?",
-      "• Slept less than 3 consecutive hours",
-      "• Woke up much later than usual",
-      "• Drank alcohol",
-      "",
-      "Reply *1* = YES (any of them) · *2* = NO (none).",
-      "",
-      "Then send your temperature like *36.52*.",
-    ].join("\n");
-    const { data: cycle } = await botDb()
-      .from("cycles")
-      .select("started_on")
-      .eq("user_id", profile.id)
-      .eq("status", "active")
-      .order("started_on", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (cycle) {
-      const computedDay = daysBetween(new Date(cycle.started_on), new Date(`${local.date}T00:00:00`)) + 1;
-      const threshold = profile.avg_cycle_length || 28;
-      if (computedDay > threshold && state.last_bleeding_check_on !== local.date) {
-        message = `⏰ Good morning — you're on day ${computedDay}, past your usual ${threshold}-day cycle. *Are you bleeding today?* Reply *YES* (new cycle starts as day 1) or *NO* (I'll keep counting). Then send your BBT.`;
-        await botDb()
-          .from("profiles")
-          .update({ bot_state: { ...state, timezone: timeZone, awaiting_bleeding_check: true, pending_logged_for: local.date, last_6am_reminder_on: local.date } })
-          .eq("id", profile.id);
-        await reply(profile, `+${profile.whatsapp_number}`, message);
-        continue;
-      }
-    }
-
-    await reply(profile, `+${profile.whatsapp_number}`, message);
-    await botDb()
-      .from("profiles")
-      .update({
-        bot_state: {
-          ...state,
-          timezone: timeZone,
-          last_6am_reminder_on: local.date,
-          awaiting_morning_check: true,
-          morning_check_on: local.date,
-          ignore_temp_on: undefined,
-        },
-      })
-      .eq("id", profile.id);
-  }
-}
-
 
 async function generateAiCommentary(input: {
   temp: number;
