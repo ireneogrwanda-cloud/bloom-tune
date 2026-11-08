@@ -1,8 +1,7 @@
 // WhatsApp bot conversation logic.
 // Handles onboarding state, temperature logging, and AI-powered responses.
 
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { sendWhatsAppText, sendWhatsAppImage } from "./whatsapp.server";
+import { botDb } from "./bot-context.server";
 import {
   parseTemperature,
   predictCycle,
