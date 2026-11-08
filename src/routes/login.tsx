@@ -69,6 +69,9 @@ export function WhatsAppOtpForm() {
     try {
       const { error } = await supabase.auth.verifyOtp({ phone, token: code, type: "sms" });
       if (error) throw error;
+      // A verified phone can reclaim only its own legacy synthetic-email data.
+      const { error: claimError } = await supabase.rpc("claim_legacy_phone_account");
+      if (claimError) throw claimError;
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("disclaimer_accepted_at")
